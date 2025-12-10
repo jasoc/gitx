@@ -1,0 +1,7 @@
+services:
+  gitx-web:
+    build: .
+    network_mode: host
+    volumes:
+      - ./:/app
+      - ../setup:/app/public/setup

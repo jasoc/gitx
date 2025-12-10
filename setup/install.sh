@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -e
 
-GITX_URL="https://parisius.github.io/gitx/gitx.py"
+GITX_URL="https://jasoc.github.io/gitx/gitx.py"
 INSTALL_DIR="$HOME/.local/bin"
 GITX_PATH="$INSTALL_DIR/gitx"
 
