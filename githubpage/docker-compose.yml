@@ -5,3 +5,4 @@ services:
     volumes:
       - ./:/app
       - ../setup:/app/public/setup
+      - ../src/gitx.py:/app/public/gitx.py
