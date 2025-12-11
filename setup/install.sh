@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -e
 
-GITX_URL="https://gitx.parisius.dev/gitx.py"
+GITX_URL="https://jasoc.github.io/gitx.py"
 INSTALL_DIR="$HOME/.local/bin"
 GITX_PATH="$INSTALL_DIR/gitx"
 
@@ -11,6 +11,12 @@ mkdir -p "$INSTALL_DIR"
 echo "▸ Fetching gitx.py..."
 curl -fsSL "$GITX_URL" -o "$GITX_PATH"
 chmod +x "$GITX_PATH"
+
+echo $INSTALL_DIR
+echo $INSTALL_DIR
+echo $GITX_URL
+echo $GITX_PATH
+echo $GITX_PATH
 
 echo ""
 echo "✔ gitx installed at: $GITX_PATH"
