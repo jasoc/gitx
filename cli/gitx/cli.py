@@ -7,6 +7,7 @@ from typing import List, Optional
 
 import typer
 from rich.console import Console
+from rich.pretty import pprint
 
 from .clone import run_gitx_clone
 from .config import AppConfig, load_config, save_config_value, show_config
@@ -14,14 +15,31 @@ from .workspace.commands import workspace_add, workspace_go, workspace_list
 
 console = Console()
 
-config_app = typer.Typer(help="Manage gitx configuration")
-workspace_app = typer.Typer(help="Manage worktree-based workspaces")
+config = typer.Typer(help="Manage gitx configuration")
+workspace = typer.Typer(help="Manage worktree-based workspaces")
 
-app = typer.Typer(add_completion=False, help="gitx – transparent git superset with workspace helpers")
+app = typer.Typer(add_completion=True, help="gitx – transparent git superset with workspace helpers")
 
-app.add_typer(config_app, name="config")
-app.add_typer(workspace_app, name="workspace")
+app.add_typer(config, name="config")
+app.add_typer(workspace, name="workspace")
 
+
+#
+# TOP LEVEL
+# gitx [go/clone] <repo> <branch>
+#
+
+@app.command()
+def go(repo: str, branch: str = "main") -> None:
+    """Shortcut for `gitx workspace go`. Switch to the specified workspace (creates it if needed)."""
+    cfg = load_config()
+    workspace_go(repo, branch, cfg)
+
+
+#
+# CLONE
+# gitx clone <repo>
+#
 
 @app.command()
 def clone(
@@ -39,7 +57,12 @@ def clone(
     raise typer.Exit(code=exit_code)
 
 
-@config_app.command("set")
+#
+# CONFIG
+# gitx config [get/set/show] <path>
+#
+
+@config.command("set")
 def config_set(key: str, value: str) -> None:
     """Set a configuration value, e.g. workspaces.baseDir."""
 
@@ -50,7 +73,7 @@ def config_set(key: str, value: str) -> None:
         raise typer.Exit(code=1) from exc
 
 
-@config_app.command("get")
+@config.command("get")
 def config_get(key: str) -> None:
     """Get a configuration value."""
 
@@ -64,15 +87,21 @@ def config_get(key: str) -> None:
     console.print(cur)
 
 
-@config_app.command("show")
+@config.command("show")
 def config_show() -> None:
     """Show the full configuration."""
 
     cfg = show_config()
-    console.print(cfg)
+    pprint(cfg, expand_all=True, console=console)
 
 
-@workspace_app.command("add")
+#
+# WORKSPACE
+# gitx workspace [add/go/list] <repo> <branch>
+#
+
+
+@workspace.command("add")
 def workspace_add_cmd(repo: str, branch: str) -> None:
     cfg = load_config()
     try:
@@ -83,8 +112,9 @@ def workspace_add_cmd(repo: str, branch: str) -> None:
     raise typer.Exit(code=code)
 
 
-@workspace_app.command("go")
+@workspace.command("go")
 def workspace_go_cmd(repo: str, branch: str = "main") -> None:
+    """Switch to the specified workspace (creates it if needed)."""
     cfg = load_config()
     try:
         code = workspace_go(repo, branch, cfg)
@@ -94,7 +124,7 @@ def workspace_go_cmd(repo: str, branch: str = "main") -> None:
     raise typer.Exit(code=code)
 
 
-@workspace_app.command("list")
+@workspace.command("list")
 def workspace_list_cmd(repo: str) -> None:
     cfg = load_config()
     try:
@@ -103,4 +133,3 @@ def workspace_list_cmd(repo: str) -> None:
         console.print(f"[red]{exc}")
         raise typer.Exit(code=1) from exc
     raise typer.Exit(code=code)
-

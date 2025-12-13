@@ -30,9 +30,9 @@ def branch_to_suffix(branch: str) -> str:
 
 
 def repo_root_path(repo: RepoIdentifier, cfg: AppConfig) -> Path:
-    return cfg.workspaces.base_dir / repo.org / repo.name
+    return cfg.globals.baseDir / repo.org / repo.name
 
 
 def workspace_path(repo: RepoIdentifier, branch: str, cfg: AppConfig) -> Path:
     suffix = branch_to_suffix(branch)
-    return cfg.workspaces.base_dir / repo.org / repo.name / f"{repo.name}{WORKSPACE_SUFFIX_SEP}{suffix}"
+    return cfg.globals.baseDir / repo.org / repo.name / f"{repo.name}{WORKSPACE_SUFFIX_SEP}{suffix}"

@@ -51,8 +51,8 @@ def build_clone_paths(target: str, cfg: AppConfig) -> Tuple[Path, Path]:
         raise ValueError(msg)
 
     org, repo = target.split("/", 1)
-    repo_root = cfg.workspaces.base_dir / org / repo / repo
-    main_worktree = cfg.workspaces.base_dir / org / repo / f"{repo}-main"
+    repo_root = cfg.globals.baseDir / org / repo / repo
+    main_worktree = cfg.globals.baseDir / org / repo / f"{repo}-main"
     return repo_root, main_worktree
 
 
@@ -64,7 +64,7 @@ def run_gitx_clone(target: str, cfg: AppConfig) -> int:
     3. git worktree add <path>-main main
     """
 
-    url = build_clone_url(target, cfg.workspaces.provider)
+    url = build_clone_url(target, cfg.globals.defaultProvider)
     repo_root, main_worktree = build_clone_paths(target, cfg)
 
     repo_root_parent = repo_root.parent

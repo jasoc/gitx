@@ -1,4 +1,5 @@
-.workspaces_debug
+cli/.workspaces_debug/
+cli/.config_debug/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

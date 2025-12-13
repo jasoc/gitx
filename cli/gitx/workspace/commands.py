@@ -117,9 +117,9 @@ def workspace_go(repo_str: str, branch: str, cfg: AppConfig) -> int:
             return code
 
     # Print cd command so the caller can eval it if desired.
-    console.print(f"[blue]Opening [yellow]{repo_str}[blue] with [green]{cfg.workspaces.editor}[/]")
+    console.print(f"cd {str(ws_path)}")
 
-    subprocess.run([cfg.workspaces.editor, str(ws_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run([cfg.globals.editor, str(ws_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     return 0
 

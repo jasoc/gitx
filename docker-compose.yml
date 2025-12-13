@@ -16,5 +16,5 @@ services:
     entrypoint: ./run.sh
     volumes:
       - ./cli:/app
-      - ./.workspaces_debug:/root/sources/workspaces
-      - ./cli/config.json:/root/.config/gitx/config.json
+      - ./cli/.workspaces_debug:/root/sources/workspaces
+      - ./cli/.config_debug:/root/.config/gitx

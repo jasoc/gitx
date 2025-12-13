@@ -1,0 +1,10 @@
+{
+  // API server
+  "flake8.cwd": "${workspaceFolder}/apiserver",
+  "flake8.args": ["--config=.flake8"],
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true
+  },
+  "python.analysis.extraPaths": ["./cli/venv/lib/python3.14/site-packages"],
+}

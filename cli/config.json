@@ -1,7 +1,0 @@
-{
-  "workspaces": {
-    "baseDir": "${HOME}/sources/workspaces",
-    "provider": "github",
-    "editor": "code"
-  }
-}
