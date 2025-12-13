@@ -7,6 +7,8 @@ services:
       - ./setup:/app/public/setup
 
   gitx-cli:
+    image: gitx-cli:latest
+    container_name: gitx
     build:
       context: cli
       target: base

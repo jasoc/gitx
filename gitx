@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-docker compose run --build --rm --remove-orphans gitx-cli "$@"
+docker compose run --build --rm --remove-orphans --name gitx gitx-cli "$@"

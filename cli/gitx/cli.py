@@ -84,7 +84,7 @@ def workspace_add_cmd(repo: str, branch: str) -> None:
 
 
 @workspace_app.command("go")
-def workspace_go_cmd(repo: str, branch: str) -> None:
+def workspace_go_cmd(repo: str, branch: str = "main") -> None:
     cfg = load_config()
     try:
         code = workspace_go(repo, branch, cfg)

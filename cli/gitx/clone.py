@@ -51,8 +51,8 @@ def build_clone_paths(target: str, cfg: AppConfig) -> Tuple[Path, Path]:
         raise ValueError(msg)
 
     org, repo = target.split("/", 1)
-    repo_root = cfg.workspaces.base_dir / org / repo
-    main_worktree = cfg.workspaces.base_dir / org / f"{repo}-main"
+    repo_root = cfg.workspaces.base_dir / org / repo / repo
+    main_worktree = cfg.workspaces.base_dir / org / repo / f"{repo}-main"
     return repo_root, main_worktree
 
 
@@ -97,10 +97,42 @@ def run_gitx_clone(target: str, cfg: AppConfig) -> int:
     if result.returncode != 0:
         return int(result.returncode)
 
-    # 3. git worktree add <path>-main main
-    console.rule("git worktree add main worktree")
+    # 3. determine default branch (prefer remote HEAD, fall back to main/master)
+    branch = None
     result = subprocess.run(
-        ["git", "worktree", "add", str(main_worktree), "main"],
+        ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0 and result.stdout:
+        # refs/remotes/origin/main -> main
+        branch = result.stdout.strip().split("/")[-1]
+    else:
+        # try common candidates (remote then local)
+        for candidate in ("origin/main", "origin/master", "main", "master"):
+            check = subprocess.run(
+                ["git", "rev-parse", "--verify", candidate],
+                cwd=str(repo_root),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if check.returncode == 0:
+                branch = candidate.split("/")[-1]
+                break
+
+    if branch is None:
+        console.print(
+            Panel.fit(
+                "[red]Unable to determine default branch (no 'main' or 'master' found).[/]",
+                title="gitx clone",
+            )
+        )
+        return 1
+
+    console.rule(f"git worktree add {str(main_worktree)} {branch}")
+    result = subprocess.run(
+        ["git", "worktree", "add", str(main_worktree), branch],
         cwd=str(repo_root),
         stdin=sys.stdin,
         stdout=sys.stdout,
@@ -108,6 +140,7 @@ def run_gitx_clone(target: str, cfg: AppConfig) -> int:
     )
     if result.returncode != 0:
         return int(result.returncode)
+
 
     console.print(Panel.fit(f"[green]Workspace created:[/] {main_worktree}", title="gitx clone"))
     return 0

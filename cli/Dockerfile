@@ -1,4 +1,4 @@
-FROM python:3.12 AS base
+FROM python:3.14 AS base
 WORKDIR /app
 
 FROM base AS build
