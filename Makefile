@@ -9,4 +9,5 @@ $(WHEEL): build
 	@echo "Wheel generated"
 
 install: $(WHEEL)
-	pip install $(WHEEL) --force-reinstall
+	./setup/install.sh ensure-pipx
+	pipx install $(WHEEL) --force
