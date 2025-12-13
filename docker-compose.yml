@@ -1,0 +1,18 @@
+services:
+  gitx-ghpage:
+    build: ghpage
+    network_mode: host
+    volumes:
+      - ./ghpage:/app
+      - ./setup:/app/public/setup
+
+  gitx-cli:
+    build:
+      context: cli
+      target: base
+    network_mode: host
+    entrypoint: ./run.sh
+    volumes:
+      - ./cli:/app
+      - ./.workspaces_debug:/root/sources/workspaces
+      - ./cli/config.json:/root/.config/gitx/config.json

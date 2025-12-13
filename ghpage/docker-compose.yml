@@ -1,0 +1,8 @@
+services:
+  gitx-web:
+    build: .
+    network_mode: host
+    volumes:
+      - ./:/app
+      - ../setup:/app/public/setup
+      - ../src/gitx.py:/app/public/gitx.py
