@@ -41,6 +41,9 @@ class WorkspaceConfig:
         return Path(os.path.expandvars(_config.globals.baseDir)) / self.full_name_sanitized()
 
     def repo_root_path(self) -> Path:
+        return self.workspace_path() / f"_{self.name_sanitized()}"
+
+    def main_path(self) -> Path:
         return self.workspace_path() / self.name_sanitized()
 
     def worktree_path_for_branch(self, branch: str) -> Path:
@@ -72,41 +75,32 @@ class AppConfig:
 
     def get_value(self, path: str) -> Any:
         current: Any = self
-
         for segment in path.split("."):
             if is_dataclass(current):
                 current = getattr(current, segment)
-
             elif isinstance(current, dict):
                 current = current[segment]
-
             else:
                 raise KeyError(path)
-
         return current
 
     def set_config_value(self, path: str, value: Any) -> None:
         parts = path.split(".")
         current: Any = self
-
         for i, segment in enumerate(parts):
             is_last = i == len(parts) - 1
-
             if is_dataclass(current):
                 if is_last:
                     setattr(current, segment, value)
                 else:
                     current = getattr(current, segment)
-
             elif isinstance(current, dict):
                 if is_last:
                     current[segment] = value
                 else:
                     current = current.setdefault(segment, {})
-
             else:
                 raise KeyError(path)
-
         self.save()
 
 
@@ -159,25 +153,20 @@ def get_config_path() -> Path:
 
 def load_config() -> AppConfig:
     path = get_config_path()
-
     if not path.exists():
         return AppConfig()
-
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return AppConfig()
-
     if not isinstance(raw, dict):
         return AppConfig()
-
     return from_dict(AppConfig, raw)
 
 
 def save_config(config: AppConfig) -> None:
     path = get_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-
     path.write_text(
         json.dumps(to_dict(config), indent=2, default=str),
         encoding="utf-8",

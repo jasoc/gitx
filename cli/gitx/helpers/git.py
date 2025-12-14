@@ -45,6 +45,26 @@ def _git(repo_root: Path, *args: str, cwd: bool = True):
         )
 
 
+def _cmd(repo_root: Path, *args: str, cwd: bool = True):
+    console.print(f"[dim]{' '.join(args)}[/]")
+
+    if cwd:
+        return subprocess.run(
+            [*args],
+            cwd=str(repo_root),
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
+    else:
+        return subprocess.run(
+            [*args],
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
+
+
 def _git_capture(repo_root: Path, *args: str, cwd: bool = True) -> subprocess.CompletedProcess[str]:
     """Run a git command and capture its output.
 
@@ -176,6 +196,10 @@ def detach_new_worktree(workspace: WorkspaceConfig, branch: str) -> int:
 
     exit_res = _git(repo_root_path, "checkout", "--detach")
     exit_res = _git(repo_root_path, "worktree", "add", str(workspace.worktree_path_for_branch(branch)), branch)
+    
+    _cmd(repo_root_path, "rm", "-f", str(workspace.main_path()))
+    _cmd(repo_root_path, "ln", "-s", str(workspace.repo_root_path()), str(workspace.main_path()))
+    
     return exit_res.returncode
 
 
@@ -431,6 +455,7 @@ def clone_and_add_worktree(target: str) -> WorkspaceConfig | int:
     if result.returncode != 0:
         return int(result.returncode)
 
-    workspace_config.defaultBranch = master_branch
+    workspace_config.defaultBranch = str(master_branch)
+    _cmd(repo_root, "ln", "-s", str(workspace_config.repo_root_path()), str(workspace_config.main_path()))
 
     return workspace_config

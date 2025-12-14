@@ -33,7 +33,7 @@ app.add_typer(workspace, name="workspace")
 #
 
 @app.command()
-def go(repo: str, branch: str = "main") -> None:
+def go(repo: str, branch: str = "main") -> int | None:
     """Switch to the specified workspace (creates it if needed)."""
     workspace: WorkspaceConfig = _config.resolve_workspace(repo)
 
@@ -42,17 +42,21 @@ def go(repo: str, branch: str = "main") -> None:
         raise typer.Exit(code=1)
 
     if branch not in git.iter_worktrees(workspace):
-        console.print("Branch worktree does not exist; creating it now...")
-        code = git.detach_new_worktree(workspace, branch)
-        if code != 0:
-            return code
+        delete_remote = typer.confirm(
+            f"Branch '{branch}' does not exist. Do you want to create it based on remote tracking branch?",
+            default=False,
+        )
+        if delete_remote:
+            code = git.detach_new_worktree(workspace, branch)
+            if code != 0:
+                return code
 
     print(f"cd {str(workspace.worktree_path_for_branch(branch))}")
     raise typer.Exit(code=0)
 
 
 @app.command()
-def code(repo: str, branch: str = "main") -> None:
+def code(repo: str, branch: str = "main") -> int | None:
     """Open your editor against the specified workspace (creates it if needed)."""
     workspace: WorkspaceConfig = _config.resolve_workspace(repo)
 
