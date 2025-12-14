@@ -144,7 +144,7 @@ install_gitx() {
   fi
 
   echo "🚀 Installing gitx via pipx..."
-  pipx install gitx || pipx upgrade gitx
+  pipx install gitx-cli || pipx upgrade gitx-cli
 
   echo ""
   echo "✅ gitx installed!"
