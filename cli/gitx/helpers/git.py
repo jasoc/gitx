@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
 
+import typer
 from rich.console import Console
 from rich.table import Table
 
@@ -114,17 +115,11 @@ def delete_branch(workspace: WorkspaceConfig, branch: str) -> int:
         console.print(f"[red]Failed to remove worktree '{worktree_path}'.[/]")
         return wt_res.returncode
 
-    # Ask whether to delete from origin as well
-    console.print(
-        f"Do you also want to delete branch '[bold]{branch}[/]' from origin? [y/N]: ",
-        end="",
+    # Ask whether to delete from origin as well (interactive confirm)
+    delete_remote = typer.confirm(
+        f"Do you also want to delete branch '{branch}' from origin?",
+        default=False,
     )
-    try:
-        answer = input().strip().lower()
-    except EOFError:
-        answer = ""
-
-    delete_remote = answer in {"y", "yes"}
 
     # Delete local branch
     console.print(f"Deleting local branch [bold]{branch}[/] …")
@@ -157,13 +152,12 @@ def detach_new_worktree(workspace: WorkspaceConfig, branch: str) -> int:
 
     if not branch_exists(repo_root_path, branch):
         console.print(f"[yellow]Branch '{branch}' does not exist locally or on origin.[/]")
-        console.print("Do you want to create it from the current HEAD and push to origin? [y/N]: ", end="")
-        try:
-            answer = input().strip().lower()
-        except EOFError:
-            answer = ""
+        create_and_push = typer.confirm(
+            "Branch does not exist. Create it from the current HEAD and push to origin?",
+            default=False,
+        )
 
-        if answer not in {"y", "yes"}:
+        if not create_and_push:
             console.print("[red]Aborting: branch was not created.[/]")
             return 1
 

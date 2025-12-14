@@ -162,12 +162,7 @@ def complete_name_repo(ctx: typer.Context, incomplete: str):
 
 
 @branch.command("add")
-def branch_add_cmd(repo: Annotated[
-                     str, typer.Option(help="The name to say hi to.", autocompletion=complete_name_repo)
-                     ],
-                   branch: Annotated[
-                     str, typer.Option(help="The name to say hi to.", autocompletion=complete_name)
-                     ]) -> None:
+def branch_add_cmd(repo: str, branch: str) -> None:
     workspace: WorkspaceConfig = _config.resolve_workspace(repo)
     if workspace is None:
         console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
