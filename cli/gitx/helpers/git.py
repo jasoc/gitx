@@ -23,14 +23,24 @@ from .paths import build_clone_paths, build_clone_url
 console = Console()
 
 
-def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args],
-        cwd=str(repo_root),
-        stdin=sys.stdin,
-        stdout=sys.stdout,
-        stderr=sys.stderr
-    )
+def _git(repo_root: Path, *args: str, cwd: bool = True):
+    console.print(f"[dim]git {' '.join(args)}[/]")
+
+    if cwd:
+        return subprocess.run(
+            ["git", *args],
+            cwd=str(repo_root),
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
+    else:
+        return subprocess.run(
+            ["git", *args],
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
 
 
 def branch_exists(repo_root: Path, branch: str) -> bool:
@@ -48,7 +58,7 @@ def detach_new_worktree(workspace: WorkspaceConfig, branch: str) -> int:
 
     repo_root_path = workspace.repo_root_path()
 
-    console.print(f"Adding workspace for [bold]{workspace.name}[/] on branch [bold]{branch}[/]")
+    console.print(f"Adding workspace for [bold]{workspace.full_name}[/] on branch [bold]{branch}[/]")
 
     exit_res = _git(repo_root_path, "fetch", "--all")
     if exit_res.returncode != 0:
@@ -84,7 +94,7 @@ def detach_new_worktree(workspace: WorkspaceConfig, branch: str) -> int:
 
 def iter_worktrees(workspace: WorkspaceConfig) -> Iterable[str]:
     result = _git(
-        workspace.repo_root_path(), "worktree", "list", "--porcelain")
+        workspace.repo_root_path().parent   , "worktree", "list", "--porcelain")
     if result.returncode != 0:
         return []
     paths: List[str] = []
@@ -106,7 +116,6 @@ def clone_and_add_worktree(target: str) -> WorkspaceConfig | int:
     url = build_clone_url(target, _config.globals.defaultProvider)
 
     workspace_config = WorkspaceConfig(
-        name=target,
         full_name=target,
         url=url,
         lastBranch="",
@@ -119,14 +128,18 @@ def clone_and_add_worktree(target: str) -> WorkspaceConfig | int:
 
     # 1. git clone
     console.rule("git clone")
-    result = _git(repo_root_parent, "clone", url)
+    repo_root.mkdir(parents=True, exist_ok=True)
+
+    result = _git(repo_root_parent, "clone", url, str(repo_root), cwd=False)
     if result.returncode != 0:
+        console.print(f"[red]Git clone failed with exit code {result.returncode}[/]")
         return int(result.returncode)
 
     # 2. git checkout --detach (in cloned repo)
     console.rule("git checkout --detach")
     result = _git(repo_root, "checkout", "--detach")
     if result.returncode != 0:
+        console.print(f"[red]Git checkout failed with exit code {result.returncode}[/]")
         return int(result.returncode)
 
     # 3. determine default branch (prefer remote HEAD, fall back to main/master)
@@ -154,6 +167,5 @@ def clone_and_add_worktree(target: str) -> WorkspaceConfig | int:
         return int(result.returncode)
 
     workspace_config.defaultBranch = master_branch
-    workspace_config.populate_configs()
 
     return workspace_config

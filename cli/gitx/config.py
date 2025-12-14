@@ -23,36 +23,28 @@ class GlobalsConfig:
 
 @dataclass(slots=True)
 class WorkspaceConfig:
-    name: str
     full_name: str
     url: str
     defaultBranch: str = "main"
     lastBranch: str = "main"
     path: str = "main"
-    provider: Optional[str] = None
+    provider: Optional[str] = "github"
     org: Optional[str] = None
 
-    def populate_configs(self) -> None:
-        if self.provider is None:
-            self.provider = "github"
+    def full_name_sanitized(self) -> str:
+        return self.full_name.replace("/", "-")
 
-        if self.provider == "github":
-            self.full_name = self.name.replace("/", "-")
-            self.name = self.full_name.split("-", 1)[-1]
-
-        self.lastBranch = self.defaultBranch
+    def name_sanitized(self) -> str:
+        return self.full_name_sanitized().split("-", 1)[-1]
 
     def workspace_path(self) -> Path:
-        if self.provider == "github" and self.org is not None:
-            return _config.globals.baseDir / self.org / self.name
-        print(_config.globals.baseDir / self.full_name)
-        return _config.globals.baseDir / self.full_name
+        return Path(os.path.expandvars(_config.globals.baseDir)) / self.full_name_sanitized()
 
     def repo_root_path(self) -> Path:
-        return self.workspace_path() / self.name
+        return self.workspace_path() / self.name_sanitized()
 
     def worktree_path_for_branch(self, branch: str) -> Path:
-        return self.workspace_path() / f"{self.name}-{branch}"
+        return self.workspace_path() / f"{self.name_sanitized()}-{branch}"
 
 
 @dataclass(slots=True)
@@ -73,7 +65,7 @@ class AppConfig:
             workspace = self.workspaces[label]
         else:
             for ws in self.workspaces.values():
-                if ws.name == label:
+                if ws.full_name == label:
                     workspace = ws
                     break
         return workspace
