@@ -1,10 +1,120 @@
-<div class="page-surface">
-  <header>
-    <h3>Gitx</h3>
-    <button>Git</button>
-    <button>Ciao</button>
-    <button>Ciao</button>
+<div class="page-surface" role="document">
+  <header class="page-header">
+    <div class="brand" aria-label="gitx home">
+      <span class="brand-mark">$</span>
+      <span class="brand-name">gitx</span>
+      <span class="brand-tagline">git worktrees with superpowers</span>
+    </div>
+
+    <nav class="page-nav" aria-label="Primary">
+      <a
+        class="nav-link"
+        href="https://github.com/jasoc/gitx"
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        GitHub
+      </a>
+      <a
+        class="nav-link"
+        href="https://pypi.org/project/gitx-cli/"
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        PyPI
+      </a>
+    </nav>
   </header>
+
+  <main class="page-main" id="main" tabindex="-1">
+    <section class="panel" aria-labelledby="install-title">
+      <h1 id="install-title" class="panel-title">Install</h1>
+      <p class="panel-lead">
+        A tiny CLI that wraps <code>git worktree</code> to make multi-branch workspaces trivial.
+      </p>
+
+      <h2 class="section-title">Linux / macOS</h2>
+      <p class="hint">Run this in your shell:</p>
+      <div class="terminal" role="region" aria-label="Install command">
+        <div class="terminal-header">
+          <span class="dot dot-red" aria-hidden="true"></span>
+          <span class="dot dot-amber" aria-hidden="true"></span>
+          <span class="dot dot-green" aria-hidden="true"></span>
+          <span class="terminal-title">install gitx</span>
+        </div>
+        <pre class="terminal-body"><code class="terminal-code">curl -sfL https://gitx.parisius.dev | sh -</code></pre>
+      </div>
+
+      <p class="note">
+        After installation, restart your shell (or ensure
+        <code>$HOME/.local/bin</code> is on your <code>PATH</code>) and run:
+      </p>
+      <div class="terminal" role="region" aria-label="Usage example">
+        <div class="terminal-header">
+          <span class="dot dot-red" aria-hidden="true"></span>
+          <span class="dot dot-amber" aria-hidden="true"></span>
+          <span class="dot dot-green" aria-hidden="true"></span>
+          <span class="terminal-title">quick check</span>
+        </div>
+        <pre class="terminal-body"><code class="terminal-code">gitx --help</code></pre>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="workflow-title">
+      <h2 id="workflow-title" class="panel-title">Minimal workflow</h2>
+      <p class="panel-lead">
+        Each branch lives in its own directory so you can switch context without stashing or junk commits.
+      </p>
+
+      <div class="terminal" role="region" aria-label="Minimal gitx workflow">
+        <div class="terminal-header">
+          <span class="dot dot-red" aria-hidden="true"></span>
+          <span class="dot dot-amber" aria-hidden="true"></span>
+          <span class="dot dot-green" aria-hidden="true"></span>
+          <span class="terminal-title">workflow</span>
+        </div>
+        <pre class="terminal-body"><code class="terminal-code"># 1. Clone once and create a workspace for the default branch
+gitx clone jasoc/gitx
+
+# 2. Create a dedicated worktree for a feature branch
+gitx branch add jasoc/gitx feature/my-work
+
+# 3. Jump into the worktree for that branch (fish)
+cd (gitx go jasoc/gitx -b feature/my-work)
+
+# 4. Or open your editor directly on that branch
+gitx code jasoc/gitx --branch feature/my-work
+
+# 5. Next time you open your workspace, gitx restores the last-opened branch
+cd (gitx go jasoc/gitx)  # jumps to feature/my-work</code></pre>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="why-title">
+      <h2 id="why-title" class="panel-title">Why gitx?</h2>
+      <ul class="bullets">
+        <li>No more random <code>git stash</code> before switching branch.</li>
+        <li>No more "WIP" commits just to avoid losing local changes.</li>
+        <li>Fast, repeatable context switches across many feature branches.</li>
+        <li>Built directly on top of plain Git and <code>git worktree</code>.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="page-footer" aria-label="Footer">
+    <p>
+      Made for multi-branch workflows. View the source on
+      <a
+        class="footer-link"
+        href="https://github.com/jasoc/gitx"
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        GitHub
+      </a>
+      .
+    </p>
+  </footer>
 </div>
 
 <router-outlet />
