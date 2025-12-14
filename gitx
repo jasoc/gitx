@@ -1,2 +1,3 @@
 #!/usr/bin/env sh
+export COMPOSE_BAKE=true
 docker compose run --build --rm --remove-orphans --name gitx gitx-cli "$@"

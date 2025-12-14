@@ -1,5 +1,23 @@
 # gitx — git with superpowers
 
+```bash
+gitx clone jasoc/gitx
+gitx code mylabel --branch develop
+gitx go mylabel
+
+gitx branch list jasoc/gitx
+gitx branch add jasoc/gitx develop
+gitx branch remove jasoc/gitx develop
+
+gitx workspace list
+gitx workspace remove jasoc/gitx
+gitx workspace label jasoc/gitx mylabel
+
+gitx config show
+gitx config get defaults.editor
+gitx config set defaults.editor
+```
+
 ### Installation (Linux/macOS):
 
 ```bash

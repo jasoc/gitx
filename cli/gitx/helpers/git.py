@@ -1,0 +1,159 @@
+"""Workspace commands for gitx.
+
+Implements:
+- gitx workspace add <repo> <branch>
+- gitx workspace go <repo> <branch>
+- gitx workspace list <repo>
+"""
+
+
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Iterable, List
+
+from rich.console import Console
+from rich.table import Table
+
+from ..config import AppConfig, WorkspaceConfig, _config
+from .paths import build_clone_paths, build_clone_url
+
+console = Console()
+
+
+def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(repo_root),
+        stdin=sys.stdin,
+        stdout=sys.stdout,
+        stderr=sys.stderr
+    )
+
+
+def branch_exists(repo_root: Path, branch: str) -> bool:
+    # Check local branch
+    local = _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
+    if local.returncode == 0:
+        return True
+
+    # Check remote tracking branch
+    remote = _git(repo_root, "show-ref", "--verify", f"refs/remotes/origin/{branch}")
+    return remote.returncode == 0
+
+
+def detach_new_worktree(workspace: WorkspaceConfig, branch: str) -> int:
+
+    repo_root_path = workspace.repo_root_path()
+
+    console.print(f"Adding workspace for [bold]{workspace.name}[/] on branch [bold]{branch}[/]")
+
+    exit_res = _git(repo_root_path, "fetch", "--all")
+    if exit_res.returncode != 0:
+        return exit_res.returncode
+
+    if not branch_exists(repo_root_path, branch):
+        console.print(f"[yellow]Branch '{branch}' does not exist locally or on origin.[/]")
+        console.print("Do you want to create it from the current HEAD and push to origin? [y/N]: ", end="")
+        try:
+            answer = input().strip().lower()
+        except EOFError:
+            answer = ""
+
+        if answer not in {"y", "yes"}:
+            console.print("[red]Aborting: branch was not created.[/]")
+            return 1
+
+        # Create branch from current HEAD
+        exit_res.returncode = _git(repo_root_path, "checkout", "-b", branch)
+        if exit_res.returncode != 0:
+            console.print(f"[red]Failed to create branch '{branch}'.[/]")
+            return exit_res.returncode
+
+        # Push and set upstream
+        exit_res.returncode = _git(repo_root_path, "push", "-u", "origin", branch)
+        if exit_res.returncode != 0:
+            console.print(f"[red]Failed to push branch '{branch}' to origin.[/]")
+            return exit_res.returncode
+
+    exit_res.returncode = _git(repo_root_path, "worktree", "add", str(workspace.worktree_path_for_branch(branch)), branch)
+    return exit_res.returncode
+
+
+def iter_worktrees(workspace: WorkspaceConfig) -> Iterable[str]:
+    result = _git(
+        workspace.repo_root_path(), "worktree", "list", "--porcelain")
+    if result.returncode != 0:
+        return []
+    paths: List[str] = []
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            _, path = line.split(" ", 1)
+            paths.append(path)
+    return paths
+
+
+def clone_and_add_worktree(target: str) -> WorkspaceConfig | int:
+    """Execute the gitx clone workflow.
+
+    1. git clone <url> <path>
+    2. git checkout --detach
+    3. git worktree add <path>-main main
+    """
+
+    url = build_clone_url(target, _config.globals.defaultProvider)
+
+    workspace_config = WorkspaceConfig(
+        name=target,
+        full_name=target,
+        url=url,
+        lastBranch="",
+        defaultBranch=""
+    )
+
+    repo_root = workspace_config.repo_root_path()
+    repo_root_parent = repo_root.parent
+    repo_root_parent.mkdir(parents=True, exist_ok=True)
+
+    # 1. git clone
+    console.rule("git clone")
+    result = _git(repo_root_parent, "clone", url)
+    if result.returncode != 0:
+        return int(result.returncode)
+
+    # 2. git checkout --detach (in cloned repo)
+    console.rule("git checkout --detach")
+    result = _git(repo_root, "checkout", "--detach")
+    if result.returncode != 0:
+        return int(result.returncode)
+
+    # 3. determine default branch (prefer remote HEAD, fall back to main/master)
+    master_branch = None
+    result = _git(repo_root, "symbolic-ref", "refs/remotes/origin/HEAD")
+
+    if result.returncode == 0 and result.stdout:
+        # refs/remotes/origin/main -> main
+        master_branch = result.stdout.strip().split("/")[-1]
+    else:
+        # try common candidates (remote then local)
+        for candidate in ("origin/main", "origin/master", "main", "master"):
+            check = _git(repo_root, "rev-parse", "--verify", candidate)
+
+            if check.returncode == 0:
+                master_branch = candidate.split("/")[-1]
+                break
+
+    if master_branch is None:
+        return 1
+
+    console.rule(f"git worktree add {str(workspace_config.worktree_path_for_branch(master_branch))} {master_branch}")
+    result = _git(repo_root, "worktree", "add", str(workspace_config.worktree_path_for_branch(master_branch)), master_branch)
+    if result.returncode != 0:
+        return int(result.returncode)
+
+    workspace_config.defaultBranch = master_branch
+    workspace_config.populate_configs()
+
+    return workspace_config
