@@ -1,24 +1,22 @@
+on:
+  workflow_dispatch:
+
 jobs:
   release-build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
-
-      - name: build release distributions
+          python-version: "3.14"
+      - name: Build release distributions
         run: |
-          python -m pip install build
-          python -m build
-
-      - name: upload windows dists
+          make build
+      - name: Upload dists
         uses: actions/upload-artifact@v4
         with:
           name: release-dists
-          path: dist/
+          path: cli/dist/
 
   pypi-publish:
     runs-on: ubuntu-latest
@@ -26,13 +24,14 @@ jobs:
       - release-build
     permissions:
       id-token: write
-
+    environment:
+      name: pypi
+      url: https://pypi.org/p/gitx-cli
     steps:
       - name: Retrieve release distributions
         uses: actions/download-artifact@v5
         with:
           name: release-dists
-          path: dist/
-
+          path: cli/dist/
       - name: Publish release distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f
+        uses: pypa/gh-action-pypi-publish@release/v1
