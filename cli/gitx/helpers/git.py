@@ -11,8 +11,9 @@ import os
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -41,6 +42,44 @@ def _git(repo_root: Path, *args: str, cwd: bool = True):
             stdout=sys.stdout,
             stderr=sys.stderr,
         )
+
+
+def _git_capture(repo_root: Path, *args: str, cwd: bool = True) -> subprocess.CompletedProcess[str]:
+    """Run a git command and capture its output.
+
+    Unlike ``_git``, this helper is intended for read-only commands where we
+    need to inspect ``stdout`` programmatically.
+    """
+
+    console.print(f"[dim]git {' '.join(args)}[/]")
+
+    if cwd:
+        return subprocess.run(
+            ["git", *args],
+            cwd=str(repo_root),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    else:
+        return subprocess.run(
+            ["git", *args],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+
+@dataclass
+class BranchStatus:
+    name: str
+    remote: Optional[str]
+    has_local: bool
+    ahead: int
+    behind: int
+    is_current: bool
 
 
 def branch_exists(repo_root: Path, branch: str) -> bool:
@@ -147,15 +186,194 @@ def detach_new_worktree(workspace: WorkspaceConfig, branch: str) -> int:
 
 
 def iter_worktrees(workspace: WorkspaceConfig) -> Iterable[str]:
-    result = _git(workspace.repo_root_path().parent, "worktree", "list", "--porcelain")
-    if result.returncode != 0:
+    """Return the list of branch names that have an attached worktree.
+
+    This is primarily used to check whether a given branch already has a
+    worktree. For richer information (including paths), prefer
+    :func:`list_branches_with_status`.
+    """
+
+    repo_root = workspace.repo_root_path()
+    result = _git_capture(repo_root, "worktree", "list", "--porcelain")
+    if result.returncode != 0 or not result.stdout:
         return []
-    paths: List[str] = []
-    for line in result.stdout.splitlines():
+
+    branches: List[str] = []
+    current_branch_ref: Optional[str] = None
+
+    for raw in result.stdout.splitlines():
+        line = raw.strip()
+        if line.startswith("branch "):
+            _, ref = line.split(" ", 1)
+            ref = ref.strip()
+            if ref.startswith("refs/heads/"):
+                current_branch_ref = ref
+                branch_name = ref.split("/")[-1]
+                branches.append(branch_name)
+
+    return branches
+
+
+def _worktree_paths_by_branch(workspace: WorkspaceConfig) -> dict[str, str]:
+    """Build a mapping ``branch_name -> worktree_path`` for the repository."""
+
+    repo_root = workspace.repo_root_path()
+    result = _git_capture(repo_root, "worktree", "list", "--porcelain")
+    if result.returncode != 0 or not result.stdout:
+        return {}
+
+    mapping: dict[str, str] = {}
+    current_path: Optional[str] = None
+
+    for raw in result.stdout.splitlines():
+        line = raw.strip()
         if line.startswith("worktree "):
             _, path = line.split(" ", 1)
-            paths.append(path)
-    return paths
+            current_path = path.strip()
+        elif line.startswith("branch ") and current_path is not None:
+            _, ref = line.split(" ", 1)
+            ref = ref.strip()
+            if ref.startswith("refs/heads/"):
+                branch_name = ref.split("/")[-1]
+                mapping[branch_name] = current_path
+
+    return mapping
+
+
+def list_branches_with_status(workspace: WorkspaceConfig) -> List[BranchStatus]:
+    """Return local branches enriched with remote and worktree information.
+
+    For each local branch we expose:
+    - its optional upstream (remote tracking branch)
+    - ahead/behind counts with respect to the upstream
+    - whether it has a dedicated worktree and its path
+    - whether it is the current ``HEAD``
+    """
+
+    repo_root = workspace.repo_root_path()
+
+    # Determine current branch (may be ``HEAD`` in detached mode).
+    current_branch = None
+    res_head = _git_capture(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
+    if res_head.returncode == 0 and res_head.stdout:
+        name = res_head.stdout.strip()
+        if name != "HEAD":
+            current_branch = name
+
+    # All local branches with their upstream and tracking summary.
+    res_branches = _git_capture(
+        repo_root,
+        "for-each-ref",
+        "--format=%(refname:short)\t%(upstream:short)\t%(upstream:track)",
+        "refs/heads",
+    )
+    if res_branches.returncode != 0 or not res_branches.stdout:
+        return []
+
+    worktrees = _worktree_paths_by_branch(workspace)
+
+    statuses: dict[str, BranchStatus] = {}
+    local_branch_names: List[str] = []
+
+    def _parse_upstream_track(track: str) -> tuple[int, int]:
+        """Parse a ``%(upstream:track)`` string into (ahead, behind).
+
+        Examples of track strings:
+        - "[ahead 2]"
+        - "[behind 1]"
+        - "[ahead 2, behind 1]"
+        - "[up to date]"
+        - "" (no upstream)
+        """
+
+        track = track.strip()
+        if not track:
+            return 0, 0
+
+        if track.startswith("[") and track.endswith("]"):
+            track = track[1:-1].strip()
+
+        if not track or track == "up to date" or track == "-":
+            return 0, 0
+
+        ahead = 0
+        behind = 0
+        parts = [p.strip() for p in track.split(",") if p.strip()]
+        for part in parts:
+            tokens = part.split()
+            if len(tokens) != 2:
+                continue
+            kind, value = tokens
+            try:
+                count = int(value)
+            except ValueError:
+                continue
+            if kind == "ahead":
+                ahead = count
+            elif kind == "behind":
+                behind = count
+
+        return ahead, behind
+
+    for raw in res_branches.stdout.splitlines():
+        if not raw.strip():
+            continue
+        parts = raw.split("\t")
+        name = parts[0].strip()
+        local_branch_names.append(name)
+        upstream = parts[1].strip() if len(parts) > 1 else ""
+        track = parts[2].strip() if len(parts) > 2 else ""
+        remote: Optional[str] = upstream or None
+
+        ahead, behind = _parse_upstream_track(track)
+
+        statuses[name] = BranchStatus(
+            name=name,
+            remote=remote,
+            has_local=True,
+            ahead=ahead,
+            behind=behind,
+            is_current=(name == current_branch),
+        )
+
+    # Add remote-only branches (i.e. those without a local counterpart).
+    res_remotes = _git_capture(
+        repo_root,
+        "for-each-ref",
+        "--format=%(refname:short)",
+        "refs/remotes",
+    )
+    if res_remotes.returncode == 0 and res_remotes.stdout:
+        for raw in res_remotes.stdout.splitlines():
+            ref = raw.strip()
+            if not ref or ref.endswith("/HEAD"):
+                # Skip symbolic heads like origin/HEAD
+                continue
+
+            # ref example: origin/feature/foo -> branch_name: feature/foo
+            if "/" not in ref:
+                continue
+
+            _, branch_name = ref.split("/", 1)
+
+            if branch_name in local_branch_names:
+                # Already represented by the local branch row; ensure remote is set.
+                status = statuses.get(branch_name)
+                if status is not None and not status.remote:
+                    status.remote = ref
+                continue
+
+            statuses[branch_name] = BranchStatus(
+                name=branch_name,
+                remote=ref,
+                has_local=False,
+                ahead=0,
+                behind=0,
+                is_current=False,
+            )
+
+    # Return statuses sorted by branch name for stable output.
+    return [statuses[name] for name in sorted(statuses.keys())]
 
 
 def clone_and_add_worktree(target: str) -> WorkspaceConfig | int:

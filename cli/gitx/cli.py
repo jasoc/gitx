@@ -2,7 +2,7 @@
 
 import subprocess
 import sys
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 import typer
 from rich.console import Console
@@ -37,6 +37,10 @@ def go(repo: str, branch: str = "main") -> None:
     """Switch to the specified workspace (creates it if needed)."""
     workspace: WorkspaceConfig = _config.resolve_workspace(repo)
 
+    if workspace is None:
+        console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
+        raise typer.Exit(code=1)
+
     if branch not in git.iter_worktrees(workspace):
         console.print("Branch worktree does not exist; creating it now...")
         code = git.detach_new_worktree(workspace, branch)
@@ -51,6 +55,10 @@ def go(repo: str, branch: str = "main") -> None:
 def code(repo: str, branch: str = "main") -> None:
     """Open your editor against the specified workspace (creates it if needed)."""
     workspace: WorkspaceConfig = _config.resolve_workspace(repo)
+
+    if workspace is None:
+        console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
+        raise typer.Exit(code=1)
 
     if branch not in git.iter_worktrees(workspace):
         console.print("Branch worktree does not exist; creating it now...")
@@ -138,8 +146,28 @@ def config_show() -> None:
 #
 
 
+def complete_name(ctx: typer.Context, incomplete: str):
+    repo = ctx.params.get("repo") or ""
+    print(ctx.params)
+    print(f"Completing branch names for repo '{repo}' and incomplete '{incomplete}'")
+    workspace: WorkspaceConfig = _config.resolve_workspace(repo)
+    if workspace is None:
+        return []
+    branches = list(git.iter_worktrees(workspace))
+    return [b for b in branches if b.startswith(incomplete)]
+
+
+def complete_name_repo(ctx: typer.Context, incomplete: str):
+    return ["gay", "jasoc", "otherrepo"]
+
+
 @branch.command("add")
-def branch_add_cmd(repo: str, branch: str) -> None:
+def branch_add_cmd(repo: Annotated[
+                     str, typer.Option(help="The name to say hi to.", autocompletion=complete_name_repo)
+                     ],
+                   branch: Annotated[
+                     str, typer.Option(help="The name to say hi to.", autocompletion=complete_name)
+                     ]) -> None:
     workspace: WorkspaceConfig = _config.resolve_workspace(repo)
     if workspace is None:
         console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
@@ -164,10 +192,44 @@ def workspace_list_cmd(repo: str) -> None:
     if workspace is None:
         console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
         raise typer.Exit(code=1)
-    worktrees = list(git.iter_worktrees(workspace))
-    table = Table(title=f"Worktrees for {workspace.workspace_path()}")
-    table.add_column("Path", style="cyan")
-    for path in worktrees:
-        table.add_row(path)
+    statuses = git.list_branches_with_status(workspace)
+
+    if not statuses:
+        console.print(f"[yellow]No branches found for workspace '{repo}'.[/]")
+        raise typer.Exit(code=0)
+
+    table = Table(title=f"Branches for {workspace.workspace_path()}")
+    table.add_column("Branch", style="cyan", justify="left")
+    table.add_column("Remote", style="magenta", justify="left")
+    table.add_column("Local", style="green", justify="center")
+    table.add_column("Status", style="yellow", justify="left")
+
+    for status in statuses:
+        branch_label = status.name
+        if status.is_current:
+            branch_label = f"* {branch_label}"
+
+        remote = status.remote or "-"
+        local = "yes" if status.has_local else "no"
+
+        if status.remote and status.has_local:
+            if status.ahead == 0 and status.behind == 0:
+                sync = "in sync"
+            elif status.ahead > 0 and status.behind == 0:
+                sync = f"↑ {status.ahead} ahead"
+            elif status.ahead == 0 and status.behind > 0:
+                sync = f"↓ {status.behind} behind"
+            else:
+                sync = f"↑ {status.ahead} / ↓ {status.behind}"
+        else:
+            sync = "-"
+
+        table.add_row(
+            branch_label,
+            remote,
+            local,
+            sync,
+        )
+
     console.print(table)
     raise typer.Exit(code=0)
