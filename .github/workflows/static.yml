@@ -26,14 +26,14 @@ jobs:
         uses: actions/checkout@v4
       - name: Compile Angular application
         run: |
-          docker compose run --rm gitx-web npm install
-          docker compose run --rm gitx-web npm run build
+          docker compose run --rm gitx-ghpage npm install
+          docker compose run --rm gitx-ghpage npm run build
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './githubpage/dist/gitx-web/browser'
+          path: './githubpage/dist/gitx-ghpage/browser'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
