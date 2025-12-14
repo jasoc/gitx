@@ -141,13 +141,29 @@ def config_show() -> None:
 @branch.command("add")
 def branch_add_cmd(repo: str, branch: str) -> None:
     workspace: WorkspaceConfig = _config.resolve_workspace(repo)
+    if workspace is None:
+        console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
+        raise typer.Exit(code=1)
     git.detach_new_worktree(workspace, branch)
     raise typer.Exit(code=0)
+
+
+@branch.command("delete")
+def branch_delete_cmd(repo: str, branch: str) -> None:
+    workspace: WorkspaceConfig = _config.resolve_workspace(repo)
+    if workspace is None:
+        console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
+        raise typer.Exit(code=1)
+    code = git.delete_branch(workspace, branch)
+    raise typer.Exit(code=code)
 
 
 @branch.command("list")
 def workspace_list_cmd(repo: str) -> None:
     workspace: WorkspaceConfig = _config.resolve_workspace(repo)
+    if workspace is None:
+        console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
+        raise typer.Exit(code=1)
     worktrees = list(git.iter_worktrees(workspace))
     table = Table(title=f"Worktrees for {workspace.workspace_path()}")
     table.add_column("Path", style="cyan")

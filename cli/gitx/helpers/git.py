@@ -54,6 +54,58 @@ def branch_exists(repo_root: Path, branch: str) -> bool:
     return remote.returncode == 0
 
 
+def delete_branch(workspace: WorkspaceConfig, branch: str) -> int:
+    repo_root_path = workspace.repo_root_path()
+
+    # Check if the branch exists locally only
+    console.print(
+        f"Checking local branch [bold]{branch}[/] in workspace [bold]{workspace.full_name}[/]",
+    )
+    local = _git(repo_root_path, "show-ref", "--verify", f"refs/heads/{branch}")
+    if local.returncode != 0:
+        console.print(f"[yellow]Branch '{branch}' does not exist locally.[/]")
+        return 1
+
+    # If there is a worktree for this branch, remove it first
+    worktree_path = workspace.worktree_path_for_branch(branch)
+
+    console.print(f"Removing worktree [bold]{worktree_path}[/] …")
+    wt_res = _git(repo_root_path, "worktree", "remove", str(worktree_path))
+    if wt_res.returncode != 0:
+        console.print(f"[red]Failed to remove worktree '{worktree_path}'.[/]")
+        return wt_res.returncode
+
+    # Ask whether to delete from origin as well
+    console.print(
+        f"Do you also want to delete branch '[bold]{branch}[/]' from origin? [y/N]: ",
+        end="",
+    )
+    try:
+        answer = input().strip().lower()
+    except EOFError:
+        answer = ""
+
+    delete_remote = answer in {"y", "yes"}
+
+    # Delete local branch
+    console.print(f"Deleting local branch [bold]{branch}[/] …")
+    exit_res = _git(repo_root_path, "branch", "-d", branch)
+    if exit_res.returncode != 0:
+        console.print(f"[red]Failed to delete local branch '{branch}'.[/]")
+        return exit_res.returncode
+
+    # Optionally delete remote branch
+    if delete_remote:
+        console.print(f"Deleting remote branch [bold]origin/{branch}[/] …")
+        exit_res = _git(repo_root_path, "push", "origin", "--delete", branch)
+        if exit_res.returncode != 0:
+            console.print(f"[red]Failed to delete branch '{branch}' from origin.[/]")
+            return exit_res.returncode
+
+    console.print(f"[green]Branch '{branch}' deleted successfully.[/]")
+    return 0
+
+
 def detach_new_worktree(workspace: WorkspaceConfig, branch: str) -> int:
 
     repo_root_path = workspace.repo_root_path()
@@ -77,24 +129,25 @@ def detach_new_worktree(workspace: WorkspaceConfig, branch: str) -> int:
             return 1
 
         # Create branch from current HEAD
-        exit_res.returncode = _git(repo_root_path, "checkout", "-b", branch)
+        exit_res = _git(repo_root_path, "checkout", "-b", branch)
+        print(exit_res)
         if exit_res.returncode != 0:
             console.print(f"[red]Failed to create branch '{branch}'.[/]")
             return exit_res.returncode
 
         # Push and set upstream
-        exit_res.returncode = _git(repo_root_path, "push", "-u", "origin", branch)
+        exit_res = _git(repo_root_path, "push", "-u", "origin", branch)
         if exit_res.returncode != 0:
             console.print(f"[red]Failed to push branch '{branch}' to origin.[/]")
             return exit_res.returncode
 
-    exit_res.returncode = _git(repo_root_path, "worktree", "add", str(workspace.worktree_path_for_branch(branch)), branch)
+    exit_res = _git(repo_root_path, "checkout", "--detach")
+    exit_res = _git(repo_root_path, "worktree", "add", str(workspace.worktree_path_for_branch(branch)), branch)
     return exit_res.returncode
 
 
 def iter_worktrees(workspace: WorkspaceConfig) -> Iterable[str]:
-    result = _git(
-        workspace.repo_root_path().parent   , "worktree", "list", "--porcelain")
+    result = _git(workspace.repo_root_path().parent, "worktree", "list", "--porcelain")
     if result.returncode != 0:
         return []
     paths: List[str] = []
