@@ -33,6 +33,10 @@ class GitCommandFailed(RuntimeError):
         self.code = result.returncode
 
 
+class GitxError(RuntimeError):
+    pass
+
+
 # ===========================================================================
 # models
 # ===========================================================================
@@ -129,22 +133,36 @@ def add_worktree(repo: RepoConfig, branch: str) -> None:
         )
 
 
-def delete_branch(repo: RepoConfig, branch: str) -> None:
+def delete_branch(repo: RepoConfig, branch: str, *, delete_remote: bool = False) -> None:
     repo_root = repo.repo_root_path()
 
     local = cmd(repo_root, "git", "show-ref", "--verify", f"refs/heads/{branch}")
-    if local.returncode != 0:
+    remote = cmd(repo_root, "git", "show-ref", "--verify", f"refs/remotes/origin/{branch}")
+
+    # No local branch and remote deletion not requested: behave as before
+    if local.returncode != 0 and not delete_remote:
         raise BranchDoesNotExist(branch)
 
-    wt_path = repo.worktree_path_for_branch(branch)
-    if wt_path.exists():
-        res = cmd(repo_root, "git", "worktree", "remove", str(wt_path))
-        if res.returncode != 0:
-            raise GitCommandFailed(["git", "worktree", "remove", str(wt_path)], res)
+    # If a local branch exists, clean up worktree and local ref
+    if local.returncode == 0:
+        wt_path = repo.worktree_path_for_branch(branch)
+        if wt_path.exists():
+            res = cmd(repo_root, "git", "worktree", "remove", str(wt_path))
+            if res.returncode != 0:
+                raise GitCommandFailed(["git", "worktree", "remove", str(wt_path)], res)
 
-    res = cmd(repo_root, "git", "branch", "-d", branch)
-    if res.returncode != 0:
-        raise GitCommandFailed(["git", "branch", "-d", branch], res)
+        res = cmd(repo_root, "git", "branch", "-d", branch)
+        if res.returncode != 0:
+            raise GitCommandFailed(["git", "branch", "-d", branch], res)
+
+    # Optionally delete the remote branch, even if there is no local one
+    if delete_remote:
+        if remote.returncode != 0:
+            raise BranchDoesNotExist(branch)
+
+        res = cmd(repo_root, "git", "push", "origin", "--delete", branch)
+        if res.returncode != 0:
+            raise GitCommandFailed(["git", "push", "origin", "--delete", branch], res)
 
 
 # ===========================================================================

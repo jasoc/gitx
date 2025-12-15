@@ -51,6 +51,11 @@ def resolve_worktree(
         if not create_branch:
             raise RuntimeError("Branch does not exist")
 
+        try:
+            git.create_branch(repo_cfg, branch)
+        except git.GitCommandFailed as exc:
+            raise RuntimeError(f"Failed to create branch '{branch}': {exc}") from exc
+
     create_worktree = typer.confirm(
         f"Worktree for branch '{branch}' does not exist. Create it?",
         default=True,
@@ -71,17 +76,25 @@ def resolve_worktree(
 # ===========================================================================
 
 @app.command()
-def debug(repo: str) -> None:
-    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
-    pprint(git.iter_worktrees(repo_cfg), expand_all=True, console=console)
-
-@app.command()
 def go(repo: str, branch: Optional[str] = None) -> None:
     repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
 
     if repo_cfg is None:
-        console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
-        raise typer.Exit(code=1)
+        clone_repo = typer.confirm(
+            f"Repository '{repo}' does not exist. Clone it?",
+            default=True,
+        )
+        if not clone_repo:
+            raise typer.Exit(code=1)
+
+        try:
+            repo_cfg = git.clone_and_add_worktree(repo)
+        except Exception as exc:  # GitCommandFailed, GitxError, etc.
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(code=1)
+
+        _config.workspaces.update({repo: repo_cfg})
+        _config.save()
 
     try:
         path = resolve_worktree(repo_cfg, branch)
@@ -94,16 +107,29 @@ def go(repo: str, branch: Optional[str] = None) -> None:
 
 
 # ===========================================================================
-# jump
+# code
 # ===========================================================================
 
 @app.command()
-def jump(repo: str, branch: Optional[str] = None) -> None:
+def code(repo: str, branch: Optional[str] = None) -> None:
     repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
 
     if repo_cfg is None:
-        console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
-        raise typer.Exit(code=1)
+        clone_repo = typer.confirm(
+            f"Repository '{repo}' does not exist. Clone it?",
+            default=True,
+        )
+        if not clone_repo:
+            raise typer.Exit(code=1)
+
+        try:
+            repo_cfg = git.clone_and_add_worktree(repo)
+        except Exception as exc:  # GitCommandFailed, GitxError, etc.
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(code=1)
+
+        _config.workspaces.update({repo: repo_cfg})
+        _config.save()
 
     try:
         path = resolve_worktree(repo_cfg, branch)
@@ -138,10 +164,11 @@ def clone(repo: str) -> None:
         )
         raise typer.Exit(code=1)
 
-    repo_cfg = git.clone_and_add_worktree(repo)
-
-    if isinstance(repo_cfg, int):
-        raise typer.Exit(code=repo_cfg)
+    try:
+        repo_cfg = git.clone_and_add_worktree(repo)
+    except Exception as exc:  # GitCommandFailed, GitxError, etc.
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1)
 
     _config.workspaces.update({repo: repo_cfg})
     _config.save()
@@ -198,10 +225,26 @@ def branch_add(repo: str, branch: str) -> None:
     repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
 
     if repo_cfg is None:
-        console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
-        raise typer.Exit(code=1)
+        clone_repo = typer.confirm(
+            f"Repository '{repo}' does not exist. Clone it?",
+            default=True,
+        )
+        if not clone_repo:
+            raise typer.Exit(code=1)
 
-    git.add_worktree(repo_cfg, branch)
+        if git.branch_exists(repo_cfg.repo_root_path(), branch):
+            console.print(f"[red]Branch '{branch}' already exists locally.[/]")
+            raise typer.Exit(code=0)
+
+        try:
+            repo_cfg = git.clone_and_add_worktree(repo)
+        except Exception as exc:  # GitCommandFailed, GitxError, etc.
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(code=1)
+
+        _config.workspaces.update({repo: repo_cfg})
+        _config.save()
+
     raise typer.Exit(code=0)
 
 
@@ -217,8 +260,21 @@ def branch_delete(repo: str, branch: str) -> None:
         console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
         raise typer.Exit(code=1)
 
-    code = git.delete_branch(repo_cfg, branch)
-    raise typer.Exit(code=code)
+    delete_remote = typer.confirm(
+        f"Also delete remote branch 'origin/{branch}'?",
+        default=False,
+    )
+
+    try:
+        git.delete_branch(repo_cfg, branch, delete_remote=delete_remote)
+    except git.BranchDoesNotExist as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1)
+    except git.GitCommandFailed as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1)
+
+    raise typer.Exit(code=0)
 
 
 # ===========================================================================

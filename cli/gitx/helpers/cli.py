@@ -7,8 +7,7 @@ from rich.console import Console
 console = Console()
 
 
-def cmd(path: Path, *args: str):
-    console.print("[bold green]Running:[/]", " ".join(args), "in", str(path))
+def cmd(path: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [*args],
         cwd=str(path),
@@ -19,7 +18,6 @@ def cmd(path: Path, *args: str):
 
 
 def cmd_capture(path: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    console.print("[bold green]Running:[/]", " ".join(args), "in", str(path))
     return subprocess.run(
         [*args],
         cwd=str(path),
