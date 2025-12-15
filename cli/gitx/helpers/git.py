@@ -26,8 +26,6 @@ console = Console()
 
 
 def _git(repo_root: Path, *args: str, cwd: bool = True):
-    console.print(f"[dim]git {' '.join(args)}[/]")
-
     if cwd:
         return subprocess.run(
             ["git", *args],
@@ -46,8 +44,6 @@ def _git(repo_root: Path, *args: str, cwd: bool = True):
 
 
 def _cmd(repo_root: Path, *args: str, cwd: bool = True):
-    console.print(f"[dim]{' '.join(args)}[/]")
-
     if cwd:
         return subprocess.run(
             [*args],
@@ -71,9 +67,6 @@ def _git_capture(repo_root: Path, *args: str, cwd: bool = True) -> subprocess.Co
     Unlike ``_git``, this helper is intended for read-only commands where we
     need to inspect ``stdout`` programmatically.
     """
-
-    console.print(f"[dim]git {' '.join(args)}[/]")
-
     if cwd:
         return subprocess.run(
             ["git", *args],
@@ -196,12 +189,15 @@ def detach_new_worktree(workspace: WorkspaceConfig, branch: str) -> int:
 
     exit_res = _git(repo_root_path, "checkout", "--detach")
     exit_res = _git(repo_root_path, "worktree", "add", str(workspace.worktree_path_for_branch(branch)), branch)
-    
-    _cmd(repo_root_path, "rm", "-f", str(workspace.main_path()))
-    _cmd(repo_root_path, "ln", "-s", str(workspace.repo_root_path()), str(workspace.main_path()))
-    
+
+    set_symlink_to_branch(workspace, branch)
+
     return exit_res.returncode
 
+
+def set_symlink_to_branch(workspace: WorkspaceConfig, branch: str) -> None:
+    _cmd(workspace.repo_root_path(), "rm", "-f", str(workspace.main_path()))
+    _cmd(workspace.repo_root_path(), "ln", "-s", str(workspace.worktree_path_for_branch(branch)), str(workspace.main_path()))
 
 def iter_worktrees(workspace: WorkspaceConfig) -> Iterable[str]:
     """Return the list of branch names that have an attached worktree.

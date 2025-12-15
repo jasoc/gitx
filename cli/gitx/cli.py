@@ -33,9 +33,12 @@ app.add_typer(workspace, name="workspace")
 #
 
 @app.command()
-def go(repo: str, branch: str = "main") -> int | None:
+def go(repo: str, branch: str = None) -> int | None:
     """Switch to the specified workspace (creates it if needed)."""
     workspace: WorkspaceConfig = _config.resolve_workspace(repo)
+
+    if branch is None:
+        branch = workspace.defaultBranch
 
     if workspace is None:
         console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
@@ -51,7 +54,12 @@ def go(repo: str, branch: str = "main") -> int | None:
             if code != 0:
                 return code
 
-    print(f"cd {str(workspace.worktree_path_for_branch(branch))}")
+    workspace.lastBranch = branch
+    _config.save()
+
+    git.set_symlink_to_branch(workspace, branch)
+
+    print(f"cd {str(workspace.main_path())}/")
     raise typer.Exit(code=0)
 
 
@@ -70,8 +78,8 @@ def code(repo: str, branch: str = "main") -> int | None:
         if code != 0:
             return code
 
-    print(f"cd {str(workspace.worktree_path_for_branch(branch))}")
-    subprocess.run([_config.globals.editor, str(workspace.worktree_path_for_branch(branch))], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(f"cd {str(workspace.main_path())}")
+    subprocess.run([_config.globals.editor, str(workspace.main_path())], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     raise typer.Exit(code=0)
 
 #
