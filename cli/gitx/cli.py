@@ -38,12 +38,12 @@ def resolve_worktree(
     if branch in git.iter_worktrees(repo_cfg):
         repo_cfg.lastBranch = branch
         _config.save()
-        return repo_cfg.worktree_path_for_branch(branch)
+        return repo_cfg.worktree_path_for(branch)
 
     if not interactive:
         raise RuntimeError("Worktree does not exist")
 
-    if not git.branch_exists(repo_cfg.repo_root_path(), branch):
+    if not git.branch_exists(repo_cfg.main_git_path(), branch):
         create_branch = typer.confirm(
             f"Branch '{branch}' does not exist. Create it from current HEAD?",
             default=False,
@@ -68,7 +68,7 @@ def resolve_worktree(
     repo_cfg.lastBranch = branch
     _config.save()
 
-    return repo_cfg.worktree_path_for_branch(branch)
+    return repo_cfg.worktree_path_for(branch)
 
 
 # ===========================================================================
@@ -158,7 +158,7 @@ def clone(repo: str) -> None:
     if repo_cfg is not None:
         console.print(
             Panel.fit(
-                f"[yellow]Repository already exists.[/] {repo_cfg.repo_root_path()}",
+                f"[yellow]Repository already exists.[/] {repo_cfg.main_git_path()}",
                 title="gitx clone",
             )
         )
@@ -176,7 +176,7 @@ def clone(repo: str) -> None:
     console.print(
         Panel.fit(
             f"[green]Repository ready:[/] "
-            f"{repo_cfg.worktree_path_for_branch(repo_cfg.defaultBranch)}",
+            f"{repo_cfg.worktree_path_for(repo_cfg.defaultBranch)}",
             title="gitx clone",
         )
     )
@@ -293,7 +293,7 @@ def branch_list(repo: str) -> None:
     if not statuses:
         raise typer.Exit(code=0)
 
-    table = Table(title=f"Branches for {repo_cfg.repo_root_path()}")
+    table = Table(title=f"Branches for {repo_cfg.main_git_path()}")
     table.add_column("Branch")
     table.add_column("Remote")
     table.add_column("Local")

@@ -29,7 +29,6 @@ class RepoConfig:
     lastBranch: str = "main"
     path: str = "main"
     provider: Optional[str] = "github"
-    org: Optional[str] = None
 
     def full_name_sanitized(self) -> str:
         return self.full_name.replace("/", "-")
@@ -37,17 +36,17 @@ class RepoConfig:
     def name_sanitized(self) -> str:
         return self.full_name_sanitized().split("-", 1)[-1]
 
-    def workspace_path(self) -> Path:
-        return Path(os.path.expandvars(_config.globals.baseDir)) / self.full_name_sanitized()
+    def owner(self) -> str:
+        return "-".join(self.full_name_sanitized().split("-")[:-1])
 
-    def repo_root_path(self) -> Path:
-        return self.workspace_path() / f"_{self.name_sanitized()}"
+    def parent_path(self) -> Path:
+        return Path(os.path.expandvars(_config.globals.baseDir)) / self.owner() / self.name_sanitized()
 
-    def main_path(self) -> Path:
-        return self.workspace_path() / self.name_sanitized()
+    def main_git_path(self) -> Path:
+        return self.parent_path() / f"_{self.name_sanitized()}"
 
-    def worktree_path_for_branch(self, branch: str) -> Path:
-        return self.workspace_path() / f"{self.name_sanitized()}-{branch}"
+    def worktree_path_for(self, branch: str) -> Path:
+        return self.parent_path() / f"{self.name_sanitized()}-{branch}"
 
 
 @dataclass(slots=True)

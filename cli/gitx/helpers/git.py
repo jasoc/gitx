@@ -65,7 +65,7 @@ def branch_exists(repo_root: Path, branch: str) -> bool:
 
 
 def iter_worktrees(repo: RepoConfig) -> Iterable[str]:
-    repo_root = repo.repo_root_path()
+    repo_root = repo.main_git_path()
     result = cmd_capture(repo_root, "git", "worktree", "list", "--porcelain")
     if result.returncode != 0 or not result.stdout:
         return []
@@ -93,7 +93,7 @@ def iter_worktrees(repo: RepoConfig) -> Iterable[str]:
 # ===========================================================================
 
 def create_branch(repo: RepoConfig, branch: str) -> None:
-    repo_root = repo.repo_root_path()
+    repo_root = repo.main_git_path()
 
     res = cmd(repo_root, "git", "checkout", "-b", branch)
     if res.returncode != 0:
@@ -105,7 +105,7 @@ def create_branch(repo: RepoConfig, branch: str) -> None:
 
 
 def add_worktree(repo: RepoConfig, branch: str) -> None:
-    repo_root = repo.repo_root_path()
+    repo_root = repo.main_git_path()
 
     res = cmd(repo_root, "git", "fetch", "--all")
     if res.returncode != 0:
@@ -123,18 +123,18 @@ def add_worktree(repo: RepoConfig, branch: str) -> None:
         "git",
         "worktree",
         "add",
-        str(repo.worktree_path_for_branch(branch)),
+        str(repo.worktree_path_for(branch)),
         branch,
     )
     if res.returncode != 0:
         raise GitCommandFailed(
-            ["git", "worktree", "add", str(repo.worktree_path_for_branch(branch)), branch],
+            ["git", "worktree", "add", str(repo.worktree_path_for(branch)), branch],
             res,
         )
 
 
 def delete_branch(repo: RepoConfig, branch: str, *, delete_remote: bool = False) -> None:
-    repo_root = repo.repo_root_path()
+    repo_root = repo.main_git_path()
 
     local = cmd(repo_root, "git", "show-ref", "--verify", f"refs/heads/{branch}")
     remote = cmd(repo_root, "git", "show-ref", "--verify", f"refs/remotes/origin/{branch}")
@@ -145,7 +145,7 @@ def delete_branch(repo: RepoConfig, branch: str, *, delete_remote: bool = False)
 
     # If a local branch exists, clean up worktree and local ref
     if local.returncode == 0:
-        wt_path = repo.worktree_path_for_branch(branch)
+        wt_path = repo.worktree_path_for(branch)
         if wt_path.exists():
             res = cmd(repo_root, "git", "worktree", "remove", str(wt_path))
             if res.returncode != 0:
@@ -170,7 +170,7 @@ def delete_branch(repo: RepoConfig, branch: str, *, delete_remote: bool = False)
 # ===========================================================================
 
 def _worktree_paths_by_branch(repo: RepoConfig) -> dict[str, str]:
-    repo_root = repo.repo_root_path()
+    repo_root = repo.main_git_path()
     result = cmd_capture(repo_root, "git", "worktree", "list", "--porcelain")
     if result.returncode != 0 or not result.stdout:
         return {}
@@ -191,7 +191,7 @@ def _worktree_paths_by_branch(repo: RepoConfig) -> dict[str, str]:
 
 
 def list_branches_with_status(repo: RepoConfig) -> List[BranchStatus]:
-    repo_root = repo.repo_root_path()
+    repo_root = repo.main_git_path()
 
     current_branch = None
     res = cmd_capture(repo_root, "git", "rev-parse", "--abbrev-ref", "HEAD")
@@ -265,7 +265,7 @@ def clone_and_add_worktree(target: str) -> RepoConfig:
         defaultBranch="",
     )
 
-    repo_root = repo_cfg.repo_root_path()
+    repo_root = repo_cfg.main_git_path()
     repo_root.parent.mkdir(parents=True, exist_ok=True)
 
     res = cmd(repo_root.parent, "git", "clone", url, str(repo_root))
