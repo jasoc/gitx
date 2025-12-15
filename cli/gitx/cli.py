@@ -1,242 +1,263 @@
-"""Typer application and command wiring for gitx."""
-
 import subprocess
-import sys
-from typing import Annotated, List, Optional
+from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.pretty import pprint
-
-from .config import WorkspaceConfig, show_config, _config
-from .helpers import git
 from rich.table import Table
-from rich.console import Console
 from rich.panel import Panel
+
+from .config import RepoConfig, get_config_path, show_config, _config
+from .helpers import git
 
 console = Console()
 
-config = typer.Typer(help="Manage gitx configuration", no_args_is_help=True)
-workspace = typer.Typer(help="Manage worktree-based workspaces", no_args_is_help=True)
-branch = typer.Typer(help="Manage git branches using worktrees", no_args_is_help=True)
+app = typer.Typer(add_completion=True, no_args_is_help=True)
 
-app = typer.Typer(add_completion=True, help="gitx – transparent git superset with workspace helpers", no_args_is_help=True)
+config = typer.Typer(no_args_is_help=True)
+branch = typer.Typer(no_args_is_help=True)
 
 app.add_typer(config, name="config")
 app.add_typer(branch, name="branch")
-app.add_typer(workspace, name="workspace")
 
 
-#
-# TOP LEVEL
-# gitx [go/clone] <repo> <branch>
-#
+# ===========================================================================
+# core
+# ===========================================================================
 
-@app.command()
-def go(repo: str, branch: str = None) -> int | None:
-    """Switch to the specified workspace (creates it if needed)."""
-    workspace: WorkspaceConfig = _config.resolve_workspace(repo)
-
+def resolve_worktree(
+    repo_cfg: RepoConfig,
+    branch: Optional[str],
+    *,
+    interactive: bool = True,
+) -> Path:
     if branch is None:
-        branch = workspace.defaultBranch
+        branch = repo_cfg.lastBranch or repo_cfg.defaultBranch
 
-    if workspace is None:
-        console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
-        raise typer.Exit(code=1)
+    if branch in git.iter_worktrees(repo_cfg):
+        repo_cfg.lastBranch = branch
+        _config.save()
+        return repo_cfg.worktree_path_for_branch(branch)
 
-    if branch not in git.iter_worktrees(workspace):
-        delete_remote = typer.confirm(
-            f"Branch '{branch}' does not exist. Do you want to create it based on remote tracking branch?",
+    if not interactive:
+        raise RuntimeError("Worktree does not exist")
+
+    if not git.branch_exists(repo_cfg.repo_root_path(), branch):
+        create_branch = typer.confirm(
+            f"Branch '{branch}' does not exist. Create it from current HEAD?",
             default=False,
         )
-        if delete_remote:
-            code = git.detach_new_worktree(workspace, branch)
-            if code != 0:
-                return code
+        if not create_branch:
+            raise RuntimeError("Branch does not exist")
 
-    workspace.lastBranch = branch
+    create_worktree = typer.confirm(
+        f"Worktree for branch '{branch}' does not exist. Create it?",
+        default=True,
+    )
+    if not create_worktree:
+        raise RuntimeError("Worktree does not exist")
+
+    git.add_worktree(repo_cfg, branch)
+
+    repo_cfg.lastBranch = branch
     _config.save()
 
-    git.set_symlink_to_branch(workspace, branch)
+    return repo_cfg.worktree_path_for_branch(branch)
 
-    print(f"cd {str(workspace.main_path())}/")
-    raise typer.Exit(code=0)
 
+# ===========================================================================
+# go
+# ===========================================================================
 
 @app.command()
-def code(repo: str, branch: str = "main") -> int | None:
-    """Open your editor against the specified workspace (creates it if needed)."""
-    workspace: WorkspaceConfig = _config.resolve_workspace(repo)
+def debug(repo: str) -> None:
+    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
+    pprint(git.iter_worktrees(repo_cfg), expand_all=True, console=console)
 
-    if workspace is None:
-        console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
+@app.command()
+def go(repo: str, branch: Optional[str] = None) -> None:
+    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
+
+    if repo_cfg is None:
+        console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
         raise typer.Exit(code=1)
 
-    if branch not in git.iter_worktrees(workspace):
-        console.print("Branch worktree does not exist; creating it now...")
-        code = git.detach_new_worktree(workspace, branch)
-        if code != 0:
-            return code
+    try:
+        path = resolve_worktree(repo_cfg, branch)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1)
 
-    print(f"cd {str(workspace.main_path())}")
-    subprocess.run([_config.globals.editor, str(workspace.main_path())], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(str(path))
     raise typer.Exit(code=0)
 
-#
-# CLONE
-# gitx clone <repo>
-#
+
+# ===========================================================================
+# jump
+# ===========================================================================
 
 @app.command()
-def clone(
-    repo: str = typer.Argument(..., help="Repository to clone, e.g. 'org/name' or full git URL"),
-) -> None:
-    """Clone a repository into the configured workspaces directory and set up worktrees."""
-    workspace: WorkspaceConfig = _config.resolve_workspace(repo)
+def jump(repo: str, branch: Optional[str] = None) -> None:
+    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
 
-    if workspace is not None:
+    if repo_cfg is None:
+        console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
+        raise typer.Exit(code=1)
+
+    try:
+        path = resolve_worktree(repo_cfg, branch)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1)
+
+    subprocess.run(
+        [_config.globals.editor, str(path)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    print(str(path))
+    raise typer.Exit(code=0)
+
+
+# ===========================================================================
+# clone
+# ===========================================================================
+
+@app.command()
+def clone(repo: str) -> None:
+    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
+
+    if repo_cfg is not None:
         console.print(
             Panel.fit(
-                f"[yellow]Workspace already exists.[/] {workspace.workspace_path()}",
+                f"[yellow]Repository already exists.[/] {repo_cfg.repo_root_path()}",
                 title="gitx clone",
             )
         )
         raise typer.Exit(code=1)
 
-    workspace = git.clone_and_add_worktree(repo)
+    repo_cfg = git.clone_and_add_worktree(repo)
 
-    if isinstance(workspace, int) and workspace == 1:
-        console.print(
-            Panel.fit(
-                "[red]Unable to determine default branch (no 'main' or 'master' found).[/]",
-                title="gitx clone",
-            )
-        )
-        raise typer.Exit(code=1)
+    if isinstance(repo_cfg, int):
+        raise typer.Exit(code=repo_cfg)
 
-    _config.workspaces.update({ repo: workspace })
+    _config.workspaces.update({repo: repo_cfg})
     _config.save()
 
     console.print(
         Panel.fit(
-            f"[green]Workspace created:[/] {workspace.worktree_path_for_branch(workspace.defaultBranch)}",
-            title="gitx clone"
+            f"[green]Repository ready:[/] "
+            f"{repo_cfg.worktree_path_for_branch(repo_cfg.defaultBranch)}",
+            title="gitx clone",
         )
     )
 
     raise typer.Exit(code=0)
 
 
-#
-# CONFIG
-#
-
+# ===========================================================================
+# config
+# ===========================================================================
 
 @config.command("set")
 def config_set(key: str, value: str) -> None:
-    """Set a configuration value, e.g. workspaces.baseDir."""
     _config.set_config_value(key, value)
     raise typer.Exit(code=0)
 
 
 @config.command("get")
 def config_get(key: str) -> None:
-    """Get a configuration value."""
     console.print(_config.get_value(key))
     raise typer.Exit(code=0)
 
 
 @config.command("show")
 def config_show() -> None:
-    """Show the full configuration."""
-    cfg = show_config()
-    pprint(cfg, expand_all=True, console=console)
-
-
-#
-# BRANCH
-#
-
-
-def complete_name(ctx: typer.Context, incomplete: str):
-    repo = ctx.params.get("repo") or ""
-    print(ctx.params)
-    print(f"Completing branch names for repo '{repo}' and incomplete '{incomplete}'")
-    workspace: WorkspaceConfig = _config.resolve_workspace(repo)
-    if workspace is None:
-        return []
-    branches = list(git.iter_worktrees(workspace))
-    return [b for b in branches if b.startswith(incomplete)]
-
-
-def complete_name_repo(ctx: typer.Context, incomplete: str):
-    return ["gay", "jasoc", "otherrepo"]
-
-
-@branch.command("add")
-def branch_add_cmd(repo: str, branch: str) -> None:
-    workspace: WorkspaceConfig = _config.resolve_workspace(repo)
-    if workspace is None:
-        console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
-        raise typer.Exit(code=1)
-    git.detach_new_worktree(workspace, branch)
+    pprint(show_config(), expand_all=True, console=console)
     raise typer.Exit(code=0)
 
 
-@branch.command("delete")
-def branch_delete_cmd(repo: str, branch: str) -> None:
-    workspace: WorkspaceConfig = _config.resolve_workspace(repo)
-    if workspace is None:
-        console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
+@config.command("edit")
+def config_edit() -> None:
+    subprocess.run(
+        [_config.globals.editor, str(get_config_path())],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    raise typer.Exit(code=0)
+
+
+# ===========================================================================
+# branch add
+# ===========================================================================
+
+@branch.command("add")
+def branch_add(repo: str, branch: str) -> None:
+    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
+
+    if repo_cfg is None:
+        console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
         raise typer.Exit(code=1)
-    code = git.delete_branch(workspace, branch)
+
+    git.add_worktree(repo_cfg, branch)
+    raise typer.Exit(code=0)
+
+
+# ===========================================================================
+# branch delete
+# ===========================================================================
+
+@branch.command("delete")
+def branch_delete(repo: str, branch: str) -> None:
+    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
+
+    if repo_cfg is None:
+        console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
+        raise typer.Exit(code=1)
+
+    code = git.delete_branch(repo_cfg, branch)
     raise typer.Exit(code=code)
 
 
-@branch.command("list")
-def workspace_list_cmd(repo: str) -> None:
-    workspace: WorkspaceConfig = _config.resolve_workspace(repo)
-    if workspace is None:
-        console.print(f"[yellow]Workspace '{repo}' does not exist.[/]")
-        raise typer.Exit(code=1)
-    statuses = git.list_branches_with_status(workspace)
+# ===========================================================================
+# branch list
+# ===========================================================================
 
+@branch.command("list")
+def branch_list(repo: str) -> None:
+    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
+
+    if repo_cfg is None:
+        console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
+        raise typer.Exit(code=1)
+
+    statuses = git.list_branches_with_status(repo_cfg)
     if not statuses:
-        console.print(f"[yellow]No branches found for workspace '{repo}'.[/]")
         raise typer.Exit(code=0)
 
-    table = Table(title=f"Branches for {workspace.workspace_path()}")
-    table.add_column("Branch", style="cyan", justify="left")
-    table.add_column("Remote", style="magenta", justify="left")
-    table.add_column("Local", style="green", justify="center")
-    table.add_column("Status", style="yellow", justify="left")
+    table = Table(title=f"Branches for {repo_cfg.repo_root_path()}")
+    table.add_column("Branch")
+    table.add_column("Remote")
+    table.add_column("Local")
+    table.add_column("Status")
 
-    for status in statuses:
-        branch_label = status.name
-        if status.is_current:
-            branch_label = f"* {branch_label}"
+    for s in statuses:
+        name = f"* {s.name}" if s.is_current else s.name
+        remote = s.remote or "-"
+        local = "yes" if s.has_local else "no"
 
-        remote = status.remote or "-"
-        local = "yes" if status.has_local else "no"
-
-        if status.remote and status.has_local:
-            if status.ahead == 0 and status.behind == 0:
-                sync = "in sync"
-            elif status.ahead > 0 and status.behind == 0:
-                sync = f"↑ {status.ahead} ahead"
-            elif status.ahead == 0 and status.behind > 0:
-                sync = f"↓ {status.behind} behind"
-            else:
-                sync = f"↑ {status.ahead} / ↓ {status.behind}"
+        if s.ahead == 0 and s.behind == 0:
+            sync = "in sync"
+        elif s.ahead > 0 and s.behind == 0:
+            sync = f"↑ {s.ahead}"
+        elif s.ahead == 0 and s.behind > 0:
+            sync = f"↓ {s.behind}"
         else:
-            sync = "-"
+            sync = f"↑ {s.ahead} / ↓ {s.behind}"
 
-        table.add_row(
-            branch_label,
-            remote,
-            local,
-            sync,
-        )
+        table.add_row(name, remote, local, sync)
 
     console.print(table)
     raise typer.Exit(code=0)

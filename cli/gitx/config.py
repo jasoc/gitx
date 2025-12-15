@@ -22,7 +22,7 @@ class GlobalsConfig:
 
 
 @dataclass(slots=True)
-class WorkspaceConfig:
+class RepoConfig:
     full_name: str
     url: str
     defaultBranch: str = "main"
@@ -53,7 +53,7 @@ class WorkspaceConfig:
 @dataclass(slots=True)
 class AppConfig:
     globals: GlobalsConfig = field(default_factory=GlobalsConfig)
-    workspaces: dict[str, WorkspaceConfig] = field(default_factory=dict)
+    workspaces: dict[str, RepoConfig] = field(default_factory=dict)
 
     def save(self) -> None:
         save_config(self)
@@ -62,8 +62,8 @@ class AppConfig:
     def load(cls) -> "AppConfig":
         return load_config()
 
-    def resolve_workspace(self, label: str) -> WorkspaceConfig:
-        workspace: WorkspaceConfig = None
+    def resolve_workspace(self, label: str) -> RepoConfig:
+        workspace: RepoConfig = None
         if label in self.workspaces.keys():
             workspace = self.workspaces[label]
         else:
