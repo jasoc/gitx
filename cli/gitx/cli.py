@@ -10,16 +10,22 @@ from rich.panel import Panel
 
 from .config import RepoConfig, get_config_path, show_config, _config
 from .helpers import git
+from .helpers.update import maybe_check_for_update
 
 console = Console()
 
-app = typer.Typer(add_completion=True, no_args_is_help=True)
+app = typer.Typer(add_completion=True)
 
 config = typer.Typer(no_args_is_help=True)
 branch = typer.Typer(no_args_is_help=True)
 
 app.add_typer(config, name="config")
 app.add_typer(branch, name="branch")
+
+
+@app.callback(invoke_without_command=True)
+def main_callback(ctx: typer.Context) -> None:
+    maybe_check_for_update(console)
 
 
 # ===========================================================================

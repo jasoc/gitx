@@ -19,6 +19,8 @@ class GlobalsConfig:
     baseDir: Path = Path("${HOME}/sources/workspaces")
     defaultProvider: str = "github"
     editor: str = "code"
+    autoUpdateCheck: bool = True
+    lastUpdateCheck: float = 0.0
 
 
 @dataclass(slots=True)
