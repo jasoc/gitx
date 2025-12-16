@@ -45,10 +45,10 @@ class RepoConfig:
         return self.full_name.replace("/", "-")
 
     def name_sanitized(self) -> str:
-        return self.full_name_sanitized().split("-", 1)[-1]
+        return self.full_name.split("/")[1].replace("/", "-")
 
     def owner(self) -> str:
-        return "-".join(self.full_name_sanitized().split("-")[:-1])
+        return self.full_name.split("/")[0].replace("/", "-")
 
     def parent_path(self) -> Path:
         return Path(os.path.expandvars(_config.globals.baseDir)) / self.owner() / self.name_sanitized()
