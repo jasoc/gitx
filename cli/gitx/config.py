@@ -54,10 +54,11 @@ class RepoConfig:
         return Path(os.path.expandvars(_config.globals.baseDir)) / self.owner() / self.name_sanitized()
 
     def main_git_path(self) -> Path:
-        print(f"_config.globals.baseDir: {_config.globals.baseDir}")
         return self.parent_path() / f"_{self.name_sanitized()}"
 
     def worktree_path_for(self, branch: str) -> Path:
+        if branch in ["main", "master"]:
+            branch = self.defaultBranch
         return self.parent_path() / f"{self.name_sanitized()}-{branch}"
 
 
