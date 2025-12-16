@@ -13,6 +13,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$script:PipxPythonCommand = $null
 
 function Write-Info($Message) {
     Write-Host "[gitx] $Message"
@@ -43,6 +44,120 @@ function Test-Python {
     return $python.Source
 }
 
+function Test-InVirtualEnvironment {
+    # Detect venv/conda so we can avoid --user installs inside isolated envs
+    return (-not [string]::IsNullOrWhiteSpace($env:VIRTUAL_ENV)) -or (-not [string]::IsNullOrWhiteSpace($env:CONDA_PREFIX))
+}
+
+function Set-PipxPythonCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $CommandPath,
+        [string[]] $CommandArgs = @()
+    )
+
+    $script:PipxPythonCommand = @{
+        Command = $CommandPath
+        Args = $CommandArgs
+    }
+}
+
+function Resolve-PipxPythonCommand {
+    if ($script:PipxPythonCommand) {
+        return $script:PipxPythonCommand
+    }
+
+    $candidates = @()
+
+    $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if ($pyLauncher) {
+        $candidates += @{
+            Command = $pyLauncher.Source
+            Args = @('-3')
+        }
+    }
+
+    $python3 = Get-Command python3 -ErrorAction SilentlyContinue
+    if ($python3) {
+        $candidates += @{
+            Command = $python3.Source
+            Args = @()
+        }
+    }
+
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) {
+        $candidates += @{
+            Command = $python.Source
+            Args = @()
+        }
+    }
+
+    foreach ($candidate in $candidates) {
+        & $candidate.Command @($candidate.Args + @('-c', 'import pipx')) 1>$null 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Set-PipxPythonCommand -CommandPath $candidate.Command -CommandArgs $candidate.Args
+            break
+        }
+    }
+
+    return $script:PipxPythonCommand
+}
+
+function Invoke-Pipx {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]] $Arguments,
+        [switch] $ThrowOnError
+    )
+
+    $invocations = @()
+
+    $pythonInvoker = Resolve-PipxPythonCommand
+    if ($pythonInvoker) {
+        $invocations += @{
+            Type = 'PythonModule'
+            Command = $pythonInvoker.Command
+            Args = $pythonInvoker.Args
+        }
+    }
+
+    $pipxCmd = Get-Command pipx -ErrorAction SilentlyContinue
+    if ($pipxCmd) {
+        $invocations += @{
+            Type = 'Executable'
+            Command = $pipxCmd.Source
+            Args = @()
+        }
+    }
+
+    if (-not $invocations) {
+        if ($ThrowOnError) {
+            Write-ErrorAndExit 'pipx is not available. Install pipx or ensure python -m pipx works.'
+        }
+        return $false
+    }
+
+    foreach ($candidate in $invocations) {
+        if ($candidate.Type -eq 'PythonModule') {
+            & $candidate.Command @($candidate.Args + @('-m', 'pipx') + $Arguments)
+        }
+        else {
+            & $candidate.Command $Arguments
+        }
+
+        if ($LASTEXITCODE -eq 0) {
+            return $true
+        }
+    }
+
+    if ($ThrowOnError) {
+        Write-ErrorAndExit ("pipx command failed: pipx {0}" -f ($Arguments -join ' '))
+    }
+
+    return $false
+}
+
 # -----------------------------------------------------------------------------
 # pipx installation & validation
 # -----------------------------------------------------------------------------
@@ -55,10 +170,26 @@ function Install-PipxWithPip {
 
     Write-Info 'Installing pipx via pip...'
 
-    & $PythonExe -m pip install --user --upgrade pip pipx
+    $commandPath = $PythonExe
+    $commandArgs = @()
+
+    if (Test-InVirtualEnvironment) {
+        Write-Info 'Detected an active virtual environment; using the system Python launcher for --user install...'
+        $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+        if (-not $pyLauncher) {
+            Write-ErrorAndExit 'Virtual environment detected but the Python launcher (py.exe) was not found. Deactivate the env or install py.exe and re-run the installer.'
+        }
+
+        $commandPath = $pyLauncher.Source
+        $commandArgs = @('-3')
+    }
+
+    & $commandPath @($commandArgs + @('-m', 'pip', 'install', '--user', '--upgrade', 'pip', 'pipx'))
     if ($LASTEXITCODE -ne 0) {
         Write-ErrorAndExit 'Failed to install pipx with pip.'
     }
+
+    Set-PipxPythonCommand -CommandPath $commandPath -CommandArgs $commandArgs
 }
 
 function Ensure-PipxPath {
@@ -101,6 +232,10 @@ function Ensure-Pipx {
     $pipxCmd = Get-Command pipx -ErrorAction SilentlyContinue
     if ($pipxCmd) {
         Write-Info 'pipx is already installed.'
+        if (-not (Resolve-PipxPythonCommand)) {
+            Write-Info 'python -m pipx was not detected; continuing with pipx executable on PATH.'
+        }
+        Ensure-PipxPath
         return $true
     }
 
@@ -113,8 +248,16 @@ function Ensure-Pipx {
     $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
 
     $pipxCmd = Get-Command pipx -ErrorAction SilentlyContinue
-    if (-not $pipxCmd) {
+    if ($pipxCmd) {
+        if (-not $script:PipxPythonCommand) {
+            Set-PipxPythonCommand -CommandPath $pipxCmd.Source -CommandArgs @()
+        }
+    }
+    elseif (-not (Resolve-PipxPythonCommand)) {
         Write-ErrorAndExit 'pipx installation appears to have failed. Please install pipx manually and re-run this script.'
+    }
+    else {
+        Write-Info 'pipx executable not yet on PATH, but python -m pipx is available.'
     }
 
     Ensure-PipxPath
@@ -135,11 +278,9 @@ function Install-Gitx {
     }
 
     Write-Info 'Installing (or upgrading) gitx-cli via pipx...'
-    pipx install gitx-cli 2>$null
-    if ($LASTEXITCODE -ne 0) {
+    if (-not (Invoke-Pipx @('install', 'gitx-cli'))) {
         Write-Info 'gitx-cli may already be installed, trying upgrade...'
-        pipx upgrade gitx-cli
-        if ($LASTEXITCODE -ne 0) {
+        if (-not (Invoke-Pipx @('upgrade', 'gitx-cli'))) {
             Write-ErrorAndExit 'Failed to install or upgrade gitx-cli using pipx.'
         }
     }
