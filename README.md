@@ -29,7 +29,7 @@ gitx --help
 ### Install (Windows / PowerShell)
 
 ```powershell
-irm https://gitx.parisius.dev/windows | iex
+irm https://gitx.parisius.dev | iex
 ```
 
 Restart the terminal (or make sure `%USERPROFILE%\.local\bin` is on `PATH`) and run:
