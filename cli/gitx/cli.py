@@ -155,6 +155,47 @@ def code(repo: str, branch: Optional[str] = None) -> None:
 
 
 # ===========================================================================
+# explore
+# ===========================================================================
+
+@app.command()
+def explore(repo: str, branch: Optional[str] = None) -> None:
+    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
+
+    if repo_cfg is None:
+        clone_repo = typer.confirm(
+            f"Repository '{repo}' does not exist. Clone it?",
+            default=True,
+        )
+        if not clone_repo:
+            raise typer.Exit(code=1)
+
+        try:
+            repo_cfg = git.clone_and_add_worktree(repo)
+        except GitCommandFailed as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(code=1)
+
+        _config.workspaces.update({repo: repo_cfg})
+        _config.save()
+
+    try:
+        path = resolve_worktree(repo_cfg, branch)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1)
+
+    subprocess.run(
+        ["xdg-open", str(path)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    print(str(path))
+    raise typer.Exit(code=0)
+
+
+# ===========================================================================
 # clone
 # ===========================================================================
 
