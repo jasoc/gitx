@@ -26,6 +26,18 @@ Then restart your shell (or ensure `$HOME/.local/bin` is on your `PATH`) and run
 gitx --help
 ```
 
+### Install (Windows / PowerShell)
+
+```powershell
+irm https://gitx.parisius.dev/windows | iex
+```
+
+Restart the terminal (or make sure `%USERPROFILE%\.local\bin` is on `PATH`) and run:
+
+```powershell
+gitx --help
+```
+
 ### Minimal workflow example
 
 ```bash
