@@ -102,7 +102,7 @@ def maybe_check_for_update(console: Console) -> None:
 
     now = time.time()
 
-    if False:
+    if not _should_check_for_update(now):
         return
 
     # Record check time early so we do not retry aggressively if
