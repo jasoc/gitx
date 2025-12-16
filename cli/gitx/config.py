@@ -14,9 +14,18 @@ CONFIG_FILE_NAME = "config.json"
 T = TypeVar("T")
 
 
+def _default_base_dir() -> Path:
+    if os.name == "nt":
+        user_profile = os.environ.get("USERPROFILE")
+        if user_profile:
+            return Path(user_profile) / "sources" / "workspaces"
+        return Path.home() / "sources" / "workspaces"
+    return Path("${HOME}/sources/workspaces")
+
+
 @dataclass(slots=True)
 class GlobalsConfig:
-    baseDir: Path = Path("${HOME}/sources/workspaces")
+    baseDir: Path = None
     defaultProvider: str = "github"
     editor: str = "code"
     autoUpdateCheck: bool = True
@@ -45,6 +54,7 @@ class RepoConfig:
         return Path(os.path.expandvars(_config.globals.baseDir)) / self.owner() / self.name_sanitized()
 
     def main_git_path(self) -> Path:
+        print(f"_config.globals.baseDir: {_config.globals.baseDir}")
         return self.parent_path() / f"_{self.name_sanitized()}"
 
     def worktree_path_for(self, branch: str) -> Path:
@@ -147,8 +157,12 @@ def to_dict(obj: Any) -> Any:
 
 
 def get_config_path() -> Path:
-    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
-    base = Path(xdg_config_home) if xdg_config_home else Path.home() / ".config"
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA")
+        base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
+    else:
+        xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+        base = Path(xdg_config_home) if xdg_config_home else Path.home() / ".config"
     return base / CONFIG_DIR_NAME / CONFIG_FILE_NAME
 
 
@@ -178,5 +192,12 @@ def show_config() -> dict[str, Any]:
     return to_dict(_config)
 
 
+def resolve_editor(editor: str) -> str:
+    if editor == "code" and os.name == "nt":
+        return "code.cmd"
+    return editor
+
+
 # Load config once at module load time
 _config = load_config()
+_config.globals.baseDir = _default_base_dir()

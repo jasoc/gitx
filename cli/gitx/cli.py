@@ -8,7 +8,7 @@ from rich.pretty import pprint
 from rich.table import Table
 from rich.panel import Panel
 
-from .config import RepoConfig, get_config_path, show_config, _config
+from .config import RepoConfig, get_config_path, show_config, _config, resolve_editor
 from .helpers import git
 from .helpers.update import maybe_check_for_update
 
@@ -144,7 +144,7 @@ def code(repo: str, branch: Optional[str] = None) -> None:
         raise typer.Exit(code=1)
 
     subprocess.run(
-        [_config.globals.editor, str(path)],
+        [resolve_editor(_config.globals.editor), str(path)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -214,8 +214,9 @@ def config_show() -> None:
 
 @config.command("edit")
 def config_edit() -> None:
+    print(f"Opening config file: {_config.globals.editor} {str(get_config_path())}")
     subprocess.run(
-        [_config.globals.editor, str(get_config_path())],
+        [resolve_editor(_config.globals.editor), str(get_config_path())],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
