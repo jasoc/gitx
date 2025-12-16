@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -184,6 +185,52 @@ def clone(repo: str) -> None:
             f"[green]Repository ready:[/] "
             f"{repo_cfg.worktree_path_for(repo_cfg.defaultBranch)}",
             title="gitx clone",
+        )
+    )
+
+    raise typer.Exit(code=0)
+
+
+# ===========================================================================
+# delete
+# ===========================================================================
+
+@app.command()
+def delete(repo: str) -> None:
+    workspace_key: str | None = None
+    repo_cfg: RepoConfig | None = None
+
+    if repo in _config.workspaces:
+        workspace_key = repo
+        repo_cfg = _config.workspaces[repo]
+    else:
+        for key, cfg in _config.workspaces.items():
+            if cfg.full_name == repo:
+                workspace_key = key
+                repo_cfg = cfg
+                break
+
+    if repo_cfg is None or workspace_key is None:
+        console.print(f"[yellow]Repository '{repo}' is not configured.[/]")
+        raise typer.Exit(code=1)
+
+    repo_path = repo_cfg.parent_path()
+    if repo_path.exists():
+        try:
+            shutil.rmtree(repo_path)
+        except OSError as exc:
+            console.print(f"[red]Failed to delete '{repo_path}': {exc}[/]")
+            raise typer.Exit(code=1)
+    else:
+        console.print(f"[yellow]Local path '{repo_path}' does not exist. Skipping removal.[/]")
+
+    _config.workspaces.pop(workspace_key, None)
+    _config.save()
+
+    console.print(
+        Panel.fit(
+            f"[green]Repository '{repo_cfg.full_name}' removed from gitx config.[/]",
+            title="gitx delete",
         )
     )
 
