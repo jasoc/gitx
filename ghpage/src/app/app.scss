@@ -19,15 +19,28 @@
   align-items: baseline;
   gap: 0.5rem;
   font-weight: 600;
+
+  .signature {
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-left: 1rem;
+
+    a {
+      color: #ffb74d;
+      text-decoration: none;
+    }
+  }
 }
 
 .brand-mark {
-  color: #ffb74d; // arancio tenue
+  color: #ffb74d;
 }
 
 .brand-name {
   text-transform: lowercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.15em;
+  font-size: 1.25rem;
+  
 }
 
 .brand-tagline {
@@ -44,16 +57,16 @@
 
 .nav-link {
   padding: 0.3rem 0.8rem;
-  border-radius: 2px;
-  border: 1px solid #ffb74d;
-  color: #ffb74d;
+  border-radius: 200px;
+  background: #ffb74d;
+  color: #000000;
+  font-weight: 600;
   text-decoration: none;
   font-size: 0.9rem;
-  background: transparent;
 }
 
 .nav-link:hover {
-  background: #262626;
+  background: #8b6327;
 }
 
 .nav-link:focus-visible {
@@ -62,8 +75,6 @@
 }
 
 .page-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 1.5rem;
   align-items: flex-start;
 }
@@ -75,10 +86,27 @@
 }
 
 .panel {
-  background: #000000;
-  border-radius: 2px;
-  border: 1px solid #3d3d3d;
   padding: 1.25rem 1.5rem;
+}
+
+.hero {
+  margin: 100px auto;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+
+  h1 {
+    font-weight: 500;
+    font-size: 4rem;
+  }
+
+  h3 {
+    font-size: 2rem;
+    margin-top: 0rem;
+    color: #bdbdbd;
+  }
 }
 
 .panel-title {
@@ -103,70 +131,13 @@
   margin: 0.75rem 0 0.5rem;
 }
 
-.terminal {
-  margin-top: 0.5rem;
-  border-radius: 2px;
-  border: 1px solid #3d3d3d;
-  overflow: hidden;
-  background: #000000;
-}
-
-.terminal-header {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.75rem;
-  background: #111111;
-  border-bottom: 1px solid #3d3d3d;
-}
-
-.dot {
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 999px;
-  display: inline-block;
-}
-
-.dot-red {
-  background: #ff7043; // arancio/rosso
-}
-
-.dot-amber {
-  background: #ffb74d; // arancio
-}
-
-.dot-green {
-  background: #66bb6a; // verde
-}
-
-.terminal-title {
-  margin-left: auto;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #9e9e9e;
-}
-
-.terminal-body {
-  margin: 0;
-  padding: 0.75rem 1rem 0.9rem;
-  overflow-x: auto;
-}
-
-.terminal-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  color: #a5d6a7; // verde chiaro
-}
-
 .bullets {
   margin: 0.5rem 0 0;
   padding-left: 1.25rem;
   font-size: 0.9rem;
 }
 
-.bullets li + li {
+.bullets li+li {
   margin-top: 0.25rem;
 }
 

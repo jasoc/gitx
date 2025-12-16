@@ -1,5 +1,6 @@
 * {
   box-sizing: border-box;
+  transition: all 0.3s cubic-bezier(.25,.8,.25,1);
 }
 
 html,
@@ -26,4 +27,11 @@ app-root {
 :focus-visible {
   outline: 2px solid #ffb74d;
   outline-offset: 2px;
+}
+
+* {
+  font-family: "Google Sans Code", monospace;
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-style: normal;
 }
