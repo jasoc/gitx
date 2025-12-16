@@ -2,6 +2,8 @@ import json
 import os
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
+import subprocess
+import sys
 from typing import Any, Type, TypeVar, Optional, get_origin, get_args
 
 from rich.console import Console
@@ -30,6 +32,8 @@ class GlobalsConfig:
     editor: str = "code"
     autoUpdateCheck: bool = True
     lastUpdateCheck: float = 0.0
+    isWSL: bool = False
+    userProfile: str = ""
 
 
 @dataclass(slots=True)
@@ -53,6 +57,9 @@ class RepoConfig:
     def parent_path(self) -> Path:
         return Path(os.path.expandvars(_config.globals.baseDir)) / self.owner() / self.name_sanitized()
 
+    def wsl_parent_path(self) -> Path:
+        return Path(f"C:\\Users\\parid\\sources\\{_config.globals.userProfile}\\workspaces")
+
     def main_git_path(self) -> Path:
         return self.parent_path() / f"_{self.name_sanitized()}"
 
@@ -61,7 +68,13 @@ class RepoConfig:
             branch = self.defaultBranch
         return self.parent_path() / f"{self.name_sanitized()}-{branch}"
 
-
+    def wsl_path_for(self, branch: str) -> Path:
+        if not _config.globals.isWSL:
+            return None
+        if branch in ["main", "master"]:
+            branch = self.defaultBranch
+        return self.wsl_parent_path() / f"{self.name_sanitized()}-{branch}"
+    
 @dataclass(slots=True)
 class AppConfig:
     globals: GlobalsConfig = field(default_factory=GlobalsConfig)
@@ -199,6 +212,30 @@ def resolve_editor(editor: str) -> str:
     return editor
 
 
-# Load config once at module load time
+def detect_wsl() -> bool:
+    if os.name != "posix":
+        return False
+    try:
+        with open("/proc/version", "r", encoding="utf-8") as f:
+            content = f.read().lower()
+            return "microsoft" in content or "wsl" in content
+    except FileNotFoundError:
+        return False
+
+
+def _cmd(path: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [*args],
+        cwd=str(path),
+        stdin=sys.stdin,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+
+
+# Config init
 _config = load_config()
 _config.globals.baseDir = _default_base_dir()
+_config.globals.isWSL = detect_wsl()
+if _config.globals.isWSL:
+    _config.globals.userProfile = _cmd(".", "/mnt/c/WINDOWS/system32/cmd.exe", "/c", "echo", "%USERNAME%", "2>/dev/null", "|", "tr", "-d", "'\\r'")

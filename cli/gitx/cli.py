@@ -13,7 +13,7 @@ from .config import RepoConfig, get_config_path, show_config, _config, resolve_e
 from .helpers import git
 from .helpers.update import maybe_check_for_update
 
-console = Console()
+console = Console() 
 
 app = typer.Typer(add_completion=True)
 
@@ -184,6 +184,7 @@ def explore(repo: str, branch: Optional[str] = None) -> None:
     except RuntimeError as exc:
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(code=1)
+    print(str(path))
 
     subprocess.run(
         ["xdg-open", str(path)],
@@ -191,7 +192,6 @@ def explore(repo: str, branch: Optional[str] = None) -> None:
         stderr=subprocess.DEVNULL,
     )
 
-    print(str(path))
     raise typer.Exit(code=0)
 
 
@@ -412,3 +412,44 @@ def branch_list(repo: str) -> None:
 
     console.print(table)
     raise typer.Exit(code=0)
+
+
+# ===========================================================================
+# branch exists
+# ===========================================================================
+
+@branch.command("exists")
+def branch_exists(repo: str, branch: str) -> None:
+    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
+
+    if repo_cfg is None:
+        console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
+        raise typer.Exit(code=1)
+
+    if git.branch_exists(repo_cfg.main_git_path(), branch):
+        console.print(f"[green]Branch '{branch}' exists.[/]")
+        raise typer.Exit(code=0)
+    else:
+        console.print(f"[red]Branch '{branch}' does not exist.[/]")
+        raise typer.Exit(code=1)
+
+
+@app.command("wsl-sync")
+def wsl_sync(repo: str, branch: Optional[str] = None) -> None:
+    if not _config.globals.isWSL:
+        console.print("[yellow]Not running inside WSL. Aborting.[/]")
+        raise typer.Exit(code=1)
+
+    repo_cfg: RepoConfig | None = _config.resolve_workspace(repo)
+
+    if repo_cfg is None:
+        console.print(f"[yellow]Repository '{repo}' does not exist.[/]")
+        raise typer.Exit(code=1)
+
+    try:
+        path = resolve_worktree(repo_cfg, branch)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=1)
+    
+    # Spa
