@@ -1,18 +1,83 @@
-step "run-a-script" {
-    name = "Run a Script"
-    properties = {
-        Octopus.Action.TargetRoles = "espx-test"
-    }
+step "pre-deployment-checks" {
+    name               = "Pre-Deployment Checks"
+    condition          = "Success"
+    start_trigger      = "StartAfterPrevious"
+    target_roles       = ["espx-windows"]
 
-    action {
-        action_type = "Octopus.Script"
+    action "pre-deployment-script" {
+        action_type                        = "Octopus.Script"
+        is_disabled                        = false
+        can_be_used_for_project_versioning = false
+
         properties = {
-            Octopus.Action.RunOnServer = "false"
-            Octopus.Action.Script.ScriptBody = "Write-Host \"hello world\""
             Octopus.Action.Script.ScriptSource = "Inline"
-            Octopus.Action.Script.Syntax = "PowerShell"
-            OctopusUseBundledTooling = "False"
+            Octopus.Action.Script.Syntax       = "PowerShell"
+            Octopus.Action.Script.ScriptBody   = <<-EOT
+                Write-Host "=== Pre-deployment checks for #{Octopus.Project.Name} ==="
+                Write-Host "Tenant: #{Octopus.Deployment.Tenant.Name}"
+                Write-Host "Environment: #{Octopus.Environment.Name}"
+
+                $serviceName = "#{ESPX.ServiceName}"
+                $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+                if ($service -and $service.Status -eq 'Running') {
+                    Write-Host "Stopping service $serviceName before deploy..."
+                    Stop-Service -Name $serviceName -Force
+                    Write-Host "Service stopped."
+                } else {
+                    Write-Host "Service $serviceName not found or not running. Fresh install."
+                }
+            EOT
         }
-        worker_pool_variable = ""
+    }
+}
+
+step "deploy-windows-service" {
+    name               = "Deploy Windows Service"
+    condition          = "Success"
+    start_trigger      = "StartAfterPrevious"
+    target_roles       = ["espx-windows"]
+
+    action "install-service" {
+        action_type = "Octopus.WindowsService"
+        
+        properties = {
+            Octopus.Action.WindowsService.ServiceName        = "#{ESPX.ServiceName}"
+            Octopus.Action.WindowsService.DisplayName        = "#{ESPX.ServiceDisplayName}"
+            Octopus.Action.WindowsService.ExecutablePath     = "bin\\ESPX.DataCollector.exe"
+            Octopus.Action.WindowsService.ServiceAccount     = "#{ESPX.ServiceAccount}"
+            Octopus.Action.WindowsService.StartMode          = "auto"
+        }
+
+        packages "ESPX.DataCollector" {
+            acquisition_location = "Server"
+            feed                 = "github-nuget-espx"
+            package_id           = "ESPX.DataCollector"
+        }
+    }
+}
+
+step "post-deployment-validation" {
+    name               = "Post-Deployment Validation"
+    condition          = "Success"
+    start_trigger      = "StartAfterPrevious"
+    target_roles       = ["espx-windows"]
+
+    action "post-deployment-script" {
+        action_type = "Octopus.Script"
+
+        properties = {
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax       = "PowerShell"
+            Octopus.Action.Script.ScriptBody   = <<-EOT
+                Write-Host "=== Post-deployment validation ==="
+                Start-Sleep -Seconds 5
+                $service = Get-Service -Name "#{ESPX.ServiceName}" -ErrorAction Stop
+                if ($service.Status -ne 'Running') {
+                    Write-Error "Service #{ESPX.ServiceName} failed to start!"
+                    exit 1
+                }
+                Write-Host "Service is running. Deployment successful."
+            EOT
+        }
     }
 }
